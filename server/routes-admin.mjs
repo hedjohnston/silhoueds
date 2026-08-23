@@ -49,9 +49,14 @@ function uniqueSlug(name) {
 /** A player is only playable with artwork and at least one hint. */
 function readiness(player) {
   const missing = [];
-  if (!player.silhouette) missing.push('silhouette');
+  if (!player.silhouette_image && !player.silhouette) missing.push('silhouette');
   if (!player.hints?.length) missing.push('hints');
   return missing;
+}
+
+/** Remove an image file that is no longer referenced. */
+function discard(filename) {
+  if (filename) fs.rmSync(path.join(UPLOAD_DIR, filename), { force: true });
 }
 
 export const adminRouter = express.Router();
@@ -100,19 +105,30 @@ async function buildSilhouette(player, options = {}) {
  * with Claude. Both steps are best-effort; whatever fails is reported and can be retried
  * from the player's card.
  */
-adminRouter.post('/players', upload.single('photo'), async (req, res) => {
+const uploads = upload.fields([
+  { name: 'silhouette', maxCount: 1 },
+  { name: 'photo', maxCount: 1 },
+]);
+
+adminRouter.post('/players', uploads, async (req, res) => {
   const name = String(req.body?.name ?? '').trim();
   if (!name) return res.status(400).json({ error: 'A name is required.' });
+
+  const silhouetteFile = req.files?.silhouette?.[0]?.filename ?? null;
+  const photoFile = req.files?.photo?.[0]?.filename ?? null;
 
   let player = players.create({
     slug: uniqueSlug(name),
     name,
-    photo: req.file?.filename ?? null,
+    photo: photoFile,
+    silhouetteImage: silhouetteFile,
+    revealImage: photoFile,
   });
 
   const steps = {};
   if (req.body?.auto !== 'false') {
-    if (player.photo) {
+    // Only fall back to cutting the player out of their photo when no silhouette was supplied.
+    if (!silhouetteFile && player.photo) {
       try {
         player = await buildSilhouette(player);
         steps.silhouette = 'done';
@@ -140,6 +156,34 @@ adminRouter.post('/players', upload.single('photo'), async (req, res) => {
   }
 
   res.status(201).json({ player: { ...player, missing: readiness(player) }, steps });
+});
+
+// Replace either image on an existing player.
+adminRouter.post('/players/:id/images', uploads, (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+
+  const fields = {};
+  const silhouetteFile = req.files?.silhouette?.[0]?.filename;
+  const photoFile = req.files?.photo?.[0]?.filename;
+
+  if (silhouetteFile) {
+    discard(player.silhouette_image);
+    fields.silhouette_image = silhouetteFile;
+    // An uploaded silhouette supersedes anything previously traced.
+    fields.silhouette = null;
+  }
+  if (photoFile) {
+    discard(player.photo);
+    fields.photo = photoFile;
+    fields.reveal_image = photoFile;
+  }
+  if (Object.keys(fields).length === 0) {
+    return res.status(400).json({ error: 'Choose at least one image.' });
+  }
+
+  const updated = players.update(player.id, fields);
+  res.json({ player: { ...updated, missing: readiness(updated) } });
 });
 
 // Re-trace an existing player's photo, optionally with a different cut-off.
@@ -224,16 +268,22 @@ adminRouter.patch('/players/:id', (req, res) => {
 adminRouter.delete('/players/:id', (req, res) => {
   const player = players.get(Number(req.params.id));
   if (!player) return res.status(404).json({ error: 'No such player' });
-  if (player.photo) fs.rmSync(path.join(UPLOAD_DIR, player.photo), { force: true });
+  for (const filename of new Set(players.images(player))) discard(filename);
   players.remove(player.id);
   res.json({ ok: true });
 });
 
-// The uploaded reference photo, for tracing against in the admin.
+// The uploaded images, for review in the admin.
 adminRouter.get('/players/:id/photo', (req, res) => {
   const player = players.get(Number(req.params.id));
   if (!player?.photo) return res.status(404).end();
   res.sendFile(path.resolve(UPLOAD_DIR, player.photo));
+});
+
+adminRouter.get('/players/:id/silhouette-image', (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player?.silhouette_image) return res.status(404).end();
+  res.sendFile(path.resolve(UPLOAD_DIR, player.silhouette_image));
 });
 
 adminRouter.get('/schedule', (req, res) => {

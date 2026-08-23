@@ -38,29 +38,37 @@ is web-served; back up both to keep your players.
 
 ## Adding a footballer
 
-In the admin, type the name, choose a photo, press **Add**. That one step does the rest:
+In the admin, type the name and upload two images:
 
-- **The silhouette is cut out of the photo automatically** — U^2-Net runs locally through
-  onnxruntime, the largest subject is kept, and the outline is traced and simplified into an
-  SVG path. About half a second per photo. Nothing is uploaded anywhere.
-- **Claude drafts the hints and accepted spellings** from the name.
+| Image | What it is |
+| --- | --- |
+| **Silhouette** | The puzzle itself — what players see and guess from |
+| **Full photo** | Revealed in place of the silhouette once the round ends |
 
-Both land on a draft for you to review. **Publish** is refused until a player has artwork and at
-least one hint.
+Claude drafts the hints and the accepted spellings from the name. Everything lands on a draft;
+**Publish** is refused until a player has artwork and at least one hint. Use **Replace images** to
+swap either image later.
 
-If the cut-out isn't right, open **Touch up by hand**: nudge the cut-off slider and re-run the
-auto-trace, or click points around the outline yourself. Full-body photos with the player clear
-of the background give the best results; a busy crowd behind them is fine.
+The full photo is served only to a visitor whose round is already over — before that the endpoint
+returns 403, so it cannot be fetched early to look up the answer. Neither image is reachable by
+guessing a path; both go through the API.
+
+### If you don't upload a silhouette
+
+One is cut out of the full photo automatically (U^2-Net locally, ~0.5s). Treat it as a rough
+fallback rather than a substitute for your own artwork — it takes whatever the model thinks the
+subject is. **Auto-cut from photo** re-runs it, and **Touch up by hand** opens the point editor
+with a cut-off slider.
 
 ### What is sent to Claude
 
 Only the name you typed. The reference photo is never sent — you already know who the player is,
 so there is nothing to identify, and keeping photos out of the request avoids using the model for
-face recognition. Segmentation is entirely local, so photos never leave your machine at all.
+face recognition. The automatic fallback is local too, so images never leave your machine at all.
 Claude is asked to report `known: false` rather than invent a career for a name it doesn't
 recognise.
 
-### If automatic silhouettes are unavailable
+### If the automatic fallback is unavailable
 
 `onnxruntime-node` and `sharp` are **optional** dependencies, and the model is fetched on install.
 If either step fails, the app still runs — the admin says so at the top and hand-tracing still
@@ -82,6 +90,13 @@ note that the spelling was off. Short names stay strict, so `Pepe` never matches
 
 Each player also carries an alias list (surname alone, nicknames, common misspellings), which
 Claude drafts and you can edit.
+
+## Look
+
+The player-facing design follows Minute Cryptic: an off-white ground, pastel colour blocks,
+heavy black outlines with a hard offset shadow, Sansita for display and Mulish for text, all
+loaded from Google Fonts. It is light-mode only and paints its own colours rather than following
+the viewer's system theme.
 
 ## Layout
 

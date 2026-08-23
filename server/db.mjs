@@ -20,7 +20,7 @@ db.exec(`
     name          TEXT    NOT NULL,
     aliases       TEXT    NOT NULL DEFAULT '[]',   -- JSON array of accepted spellings
     hints         TEXT    NOT NULL DEFAULT '[]',   -- JSON array of {label, value}
-    silhouette    TEXT,                            -- SVG markup, null until traced
+    silhouette    TEXT,                            -- SVG markup, when traced or auto-generated
     photo         TEXT,                            -- uploaded reference photo filename
     status        TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
                           CHECK (status IN ('draft', 'ready')),
@@ -50,6 +50,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS plays_by_date ON plays(date);
 `);
 
+// Additive migrations: new columns are appended to existing databases in place.
+const columns = new Set(db.prepare('PRAGMA table_info(players)').all().map((c) => c.name));
+for (const [name, definition] of [
+  ['silhouette_image', 'TEXT'],  // uploaded silhouette artwork filename
+  ['reveal_image', 'TEXT'],      // full photo, shown once the round is over
+]) {
+  if (!columns.has(name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
+}
+
 const parse = (row) =>
   row && {
     ...row,
@@ -71,13 +80,24 @@ export const players = {
   ready() {
     return db.prepare("SELECT * FROM players WHERE status = 'ready' ORDER BY id").all().map(parse);
   },
-  create({ slug, name, aliases = [], hints = [], silhouette = null, photo = null, hintSource = 'manual' }) {
+  /** Every image filename a player owns, for cleaning up on delete or replace. */
+  images(player) {
+    return [player.photo, player.silhouette_image, player.reveal_image].filter(Boolean);
+  },
+  create({
+    slug, name, aliases = [], hints = [], silhouette = null, photo = null,
+    silhouetteImage = null, revealImage = null, hintSource = 'manual',
+  }) {
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO players (slug, name, aliases, hints, silhouette, photo, hint_source)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO players
+           (slug, name, aliases, hints, silhouette, photo, silhouette_image, reveal_image, hint_source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(slug, name, JSON.stringify(aliases), JSON.stringify(hints), silhouette, photo, hintSource);
+      .run(
+        slug, name, JSON.stringify(aliases), JSON.stringify(hints), silhouette, photo,
+        silhouetteImage, revealImage, hintSource,
+      );
     return this.get(lastInsertRowid);
   },
   update(id, fields) {
@@ -87,6 +107,8 @@ export const players = {
       hints: JSON.stringify,
       silhouette: (v) => v,
       photo: (v) => v,
+      silhouette_image: (v) => v,
+      reveal_image: (v) => v,
       status: (v) => v,
       hint_source: (v) => v,
     };

@@ -4,7 +4,7 @@ const el = (id) => document.getElementById(id);
 const dom = Object.fromEntries(
   [
     'login', 'login-form', 'login-error', 'password', 'app', 'logout', 'claude-state',
-    'add-form', 'new-name', 'new-photo', 'add-error', 'players', 'counts',
+    'add-form', 'new-name', 'new-photo', 'new-silhouette', 'add-error', 'players', 'counts',
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
@@ -61,7 +61,16 @@ function renderPlayers() {
 
     const art = document.createElement('div');
     art.className = 'player-art';
-    art.innerHTML = player.silhouette ?? '<span class="art-empty">no silhouette</span>';
+    if (player.silhouette_image) {
+      const image = document.createElement('img');
+      image.src = `/api/admin/players/${player.id}/silhouette-image`;
+      image.alt = '';
+      art.append(image);
+    } else if (player.silhouette) {
+      art.innerHTML = player.silhouette;
+    } else {
+      art.innerHTML = '<span class="art-empty">no silhouette</span>';
+    }
 
     const details = document.createElement('div');
     details.className = 'player-details';
@@ -117,9 +126,14 @@ function renderPlayers() {
       }
     };
 
+    const replace = document.createElement('button');
+    replace.className = 'ghost';
+    replace.textContent = 'Replace images';
+    replace.onclick = () => openImagePicker(player);
+
     const auto = document.createElement('button');
     auto.className = 'ghost';
-    auto.textContent = player.silhouette ? 'Redo silhouette from photo' : 'Make silhouette from photo';
+    auto.textContent = 'Auto-cut from photo';
     auto.disabled = !player.photo || !segmentation.available;
     auto.title = !player.photo
       ? 'This player has no reference photo.'
@@ -141,7 +155,7 @@ function renderPlayers() {
 
     const trace = document.createElement('button');
     trace.className = 'ghost';
-    trace.textContent = player.silhouette ? 'Touch up by hand' : 'Trace by hand';
+    trace.textContent = player.silhouette_image || player.silhouette ? 'Touch up by hand' : 'Trace by hand';
     trace.onclick = () => openTracer(player);
 
     const save = document.createElement('button');
@@ -189,7 +203,7 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(auto, generate, trace, save, publish, remove);
+    actions.append(replace, auto, generate, trace, save, publish, remove);
     details.append(hints, aliasLabel, source, actions);
     body.append(art, details);
     card.append(head, body);
@@ -242,6 +256,29 @@ async function refreshSchedule() {
     row.textContent = `Today: ${stats.plays} played, ${stats.wins ?? 0} solved.`;
     dom.schedule.append(row);
   }
+}
+
+/** Swap in new artwork for an existing player. */
+function openImagePicker(player) {
+  const picker = document.createElement('input');
+  picker.type = 'file';
+  picker.accept = 'image/png,image/jpeg,image/webp,image/avif,image/svg+xml';
+  picker.multiple = true;
+  picker.onchange = async () => {
+    const [first, second] = picker.files;
+    if (!first) return;
+    const form = new FormData();
+    // One file replaces the silhouette; two replace silhouette then photo, in that order.
+    form.append('silhouette', first);
+    if (second) form.append('photo', second);
+    try {
+      await api(`/api/admin/players/${player.id}/images`, { method: 'POST', form });
+      await refresh();
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+  picker.click();
 }
 
 // --- tracer --------------------------------------------------------------
@@ -336,6 +373,7 @@ dom['add-form'].onsubmit = async (event) => {
   showError(dom['add-error'], '');
   const form = new FormData();
   form.append('name', dom['new-name'].value.trim());
+  if (dom['new-silhouette'].files[0]) form.append('silhouette', dom['new-silhouette'].files[0]);
   if (dom['new-photo'].files[0]) form.append('photo', dom['new-photo'].files[0]);
   const button = dom['add-form'].querySelector('button');
   button.disabled = true;

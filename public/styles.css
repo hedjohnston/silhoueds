@@ -1,177 +1,258 @@
+/* Palette and component idiom follow Minute Cryptic: off-white ground, pastel blocks, heavy
+   black outlines with a hard offset shadow, Sansita for display and Mulish for text. */
+
 :root {
-  --bg: #0b0f14;
-  --card: #131a23;
-  --edge: #24303d;
-  --ink: #eef3f8;
-  --muted: #8fa3b8;
-  --accent: #3ddc97;
-  --wrong: #e2585a;
-  --stage: #1b2632;
-  --radius: 14px;
+  --ground: #fcfcfc;
+  --card: #f4f5f6;
+  --ink: #000000;
+  --muted: #596170;
+  --line: #000000;
+
+  --blue: #d5e8ff;
+  --blue-deep: #add3ff;
+  --pink: #f5d1fd;
+  --green: #befac4;
+  --red: #ffa7a7;
+  --yellow: #fff2b1;
+  --grey: #9f9f9f;
+  --grey-light: #f2f2f2;
+
+  --shadow: 3px 3px 0 0 var(--line);
+  --shadow-press: 1px 1px 0 0 var(--line);
+  --radius-card: 16px;
+
+  --display: Sansita, Georgia, "Times New Roman", serif;
+  --text: Mulish, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-* { box-sizing: border-box; }
+/* The design commits to one light world, so it paints its own ground rather than inheriting
+   the host's theme. */
 
-/* `display` on .guess-form etc. would otherwise beat the hidden attribute. */
+* { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
 body {
   margin: 0;
   min-height: 100vh;
+  padding: clamp(10px, 3vw, 32px) clamp(10px, 3vw, 16px);
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: clamp(12px, 3vw, 40px);
-  background: radial-gradient(circle at 50% 0%, #16202c 0%, var(--bg) 60%);
+  background: var(--ground);
   color: var(--ink);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 16px/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 .card {
-  width: min(560px, 100%);
-  background: var(--card);
-  border: 1px solid var(--edge);
-  border-radius: var(--radius);
-  padding: clamp(16px, 4vw, 28px);
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.header { text-align: center; margin-bottom: 18px; }
+/* --- masthead --- */
+
+.header { text-align: center; }
 
 .logo {
   margin: 0;
-  font-size: clamp(28px, 7vw, 38px);
-  letter-spacing: -0.02em;
+  font-family: var(--display);
+  font-size: clamp(34px, 9vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
 }
 
-.tagline { margin: 4px 0 0; color: var(--muted); }
+.tagline { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
 
 .date {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- the puzzle --- */
+
+.stage {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  min-height: 300px;
+  background: var(--blue);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+
+.silhouette { color: var(--ink); line-height: 0; }
+
+.silhouette svg, .silhouette img {
+  display: block;
+  height: clamp(210px, 40vh, 320px);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* The reveal photo replaces the silhouette when the round ends. */
+.silhouette img.reveal {
+  border-radius: 8px;
+  border: 3px solid var(--line);
+}
+
+/* --- hints --- */
+
+.hints, .history { list-style: none; margin: 0; padding: 0; }
+
+.hints { display: flex; flex-direction: column; gap: 8px; }
+
+.hint {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 14px;
+  background: var(--yellow);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  font-size: 15px;
+}
+
+.hint-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.hint-value { font-weight: 600; }
+
+.hint-empty {
+  justify-content: center;
+  background: none;
+  border-style: dashed;
+  border-color: var(--grey);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* --- guesses --- */
+
+.history { display: flex; flex-direction: column; gap: 8px; }
+
+.guess {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--red);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.guess::before {
+  content: "✕";
+  font-weight: 800;
   font-size: 13px;
+}
+
+.guess-correct { background: var(--green); }
+.guess-correct::before { content: "✓"; }
+
+.guess.guess-skipped { background: var(--grey-light); color: var(--muted); }
+.guess.guess-skipped::before { content: "→"; }
+
+.guesses-left {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-/* --- silhouette --- */
+.notice { margin: 0; min-height: 20px; text-align: center; font-size: 14px; font-weight: 600; }
 
-.stage {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-  background: var(--stage);
-  border-radius: var(--radius);
-}
+/* --- controls --- */
 
-.silhouette {
-  color: #05080b;
-  transition: color 600ms ease;
-}
+.guess-form { display: flex; gap: 10px; }
 
-.silhouette.revealed { color: var(--accent); }
-
-.silhouette svg {
-  display: block;
-  height: clamp(220px, 42vh, 340px);
-  width: auto;
-  max-width: 100%;
-}
-
-/* --- hints --- */
-
-.hints, .history, .hints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 16px 0;
-  min-height: 34px;
-}
-
-.hint {
-  display: inline-flex;
-  gap: 6px;
-  align-items: baseline;
-  padding: 6px 11px;
-  background: #1c2733;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  font-size: 14px;
-}
-
-.hint-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-
-.hint-empty { color: var(--muted); background: none; border-style: dashed; }
-
-/* --- guesses --- */
-
-.history { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-
-.guess {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border-left: 4px solid var(--wrong);
-  background: #1c2733;
-  font-size: 15px;
-}
-
-.guess-correct { border-left-color: var(--accent); }
-
-.notice { min-height: 20px; margin: 0 0 8px; text-align: center; font-size: 14px; color: var(--accent); }
-
-.guesses-left { margin: 0 0 12px; color: var(--muted); font-size: 14px; text-align: center; }
-
-.guess-form { display: flex; gap: 8px; }
-
-.input-wrap { position: relative; flex: 1; }
+.input-wrap { flex: 1; }
 
 #guess-input {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--edge);
-  background: #0f151c;
-  color: var(--ink);
-  font-size: 16px; /* 16px keeps iOS from zooming on focus */
-}
-
-#guess-input:focus-visible, button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-button { font: inherit; cursor: pointer; border-radius: 10px; }
-
-.primary {
-  padding: 12px 18px;
-  border: none;
-  background: var(--accent);
-  color: #06231a;
+  padding: 13px 18px;
+  font: inherit;
+  font-size: 16px; /* keeps iOS from zooming on focus */
   font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
 }
 
-.ghost {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--edge);
-  background: none;
-  color: var(--muted);
+#guess-input::placeholder { color: var(--grey); font-weight: 500; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--ink);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
-.ghost:hover { color: var(--ink); }
+button:hover:not(:disabled) { transform: scale(1.04); }
+button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: var(--shadow-press); }
+button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+:focus-visible { outline: 3px solid var(--muted); outline-offset: 3px; }
+
+.primary { padding: 13px 26px; background: var(--pink); font-size: 17px; }
+
+.ghost { width: 100%; padding: 12px; background: #fff; font-size: 16px; }
 
 /* --- result --- */
 
-.result { margin-top: 18px; text-align: center; }
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 20px;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
 
-.result-title { margin: 0; font-size: 22px; }
+.result-title { margin: 0; font-family: var(--display); font-size: 26px; }
 
-.result-name { margin: 6px 0 16px; font-size: 20px; color: var(--accent); font-weight: 600; }
+.result-name {
+  margin: 0;
+  padding: 7px 20px;
+  background: var(--green);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+}
 
-.share-status { min-height: 20px; margin: 10px 0 0; color: var(--muted); font-size: 14px; white-space: pre-line; }
+.share-status { margin: 0; min-height: 20px; font-size: 14px; color: var(--muted); white-space: pre-line; }
 
-.comeback { color: var(--muted); font-size: 13px; }
+.comeback { margin: 0; font-size: 13px; color: var(--muted); }
 
 .visually-hidden {
   position: absolute;
@@ -181,8 +262,9 @@ button { font: inherit; cursor: pointer; border-radius: 10px; }
   clip-path: inset(50%);
 }
 
-body[data-error="true"] .silhouette { color: var(--wrong); font-size: 14px; }
+body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+  button:hover:not(:disabled) { transform: none; }
 }

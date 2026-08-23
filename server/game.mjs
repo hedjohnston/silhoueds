@@ -42,7 +42,11 @@ export function publicState(player, play) {
   const finished = play?.finished ?? false;
   return {
     date: play?.date,
-    silhouette: player.silhouette,
+    // Uploaded artwork is served through the API; a traced outline is inlined as SVG.
+    silhouetteUrl: player.silhouette_image ? '/api/puzzle/silhouette' : null,
+    silhouette: player.silhouette_image ? null : player.silhouette,
+    // The reveal photo only becomes reachable once the round is over.
+    revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
     hints: revealedHints(player, guesses),
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),
     guessesLeft: MAX_GUESSES - guesses.length,

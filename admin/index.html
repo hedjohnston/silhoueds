@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Silhoueds admin</title>
+  <meta name="color-scheme" content="light">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sansita:wght@700&family=Mulish:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="admin.css">
 </head>
 <body>
@@ -36,16 +40,23 @@
           <input id="new-name" placeholder="e.g. Ronaldinho" required>
         </div>
         <div class="field">
-          <label for="new-photo">Reference photo</label>
+          <label for="new-silhouette">Silhouette image</label>
+          <input id="new-silhouette" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/svg+xml">
+        </div>
+        <div class="field">
+          <label for="new-photo">Full photo</label>
           <input id="new-photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif">
         </div>
         <button class="primary" type="submit">Add</button>
       </form>
       <p class="hint-text">
-        Adding a player does the rest automatically: the silhouette is cut out of the photo on
-        this machine, and Claude drafts the hints from the name alone. The photo is never sent
-        anywhere, and nothing goes live until you publish it. Full-body photos with the player
-        clear of the background work best.
+        Upload the silhouette and the full photo. The silhouette is the puzzle; the full photo is
+        revealed once the round is over. Claude drafts the hints from the name alone — the images
+        are never sent anywhere. Nothing goes live until you publish it.
+      </p>
+      <p class="hint-text">
+        Leave the silhouette empty and one will be cut out of the photo automatically, which is a
+        rough fallback rather than a substitute for your own artwork.
       </p>
       <p class="error" id="add-error" role="alert"></p>
     </section>

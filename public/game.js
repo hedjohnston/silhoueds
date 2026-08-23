@@ -34,12 +34,31 @@ async function api(path, options = {}) {
 }
 
 function renderSilhouette() {
-  // The SVG is inlined rather than set as an <img> src so CSS `color` can tint it on reveal.
-  if (dom.silhouette.dataset.rendered !== state.silhouette) {
-    dom.silhouette.innerHTML = state.silhouette ?? '';
-    dom.silhouette.dataset.rendered = state.silhouette ?? '';
+  // Once the round is over, the full photo takes the stage.
+  const key = state.revealUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
+  if (dom.silhouette.dataset.rendered === key) return;
+  dom.silhouette.dataset.rendered = key;
+  dom.silhouette.innerHTML = '';
+
+  if (state.revealUrl) {
+    const photo = document.createElement('img');
+    photo.className = 'reveal';
+    photo.src = state.revealUrl;
+    photo.alt = state.answer ? `Photo of ${state.answer}` : 'The answer revealed';
+    dom.silhouette.append(photo);
+    return;
   }
-  dom.silhouette.classList.toggle('revealed', state.finished);
+
+  if (state.silhouetteUrl) {
+    const art = document.createElement('img');
+    art.src = state.silhouetteUrl;
+    art.alt = "Today's silhouette";
+    dom.silhouette.append(art);
+    return;
+  }
+
+  // A traced outline is inlined as SVG so CSS `color` can style it.
+  dom.silhouette.innerHTML = state.silhouette ?? '';
 }
 
 function renderHints() {
@@ -69,7 +88,11 @@ function renderHistory() {
   dom.history.innerHTML = '';
   for (const guess of state.guesses) {
     const row = document.createElement('li');
-    row.className = guess.correct ? 'guess guess-correct' : 'guess guess-wrong';
+    row.className = guess.correct
+      ? 'guess guess-correct'
+      : guess.skipped
+        ? 'guess guess-skipped'
+        : 'guess guess-wrong';
     row.textContent = guess.skipped ? 'Skipped' : guess.name;
     dom.history.append(row);
   }
@@ -80,9 +103,11 @@ function render() {
   renderHints();
   renderHistory();
 
-  dom.guessesLeft.textContent = state.finished
-    ? ''
-    : `${state.guessesLeft} ${state.guessesLeft === 1 ? 'guess' : 'guesses'} left`;
+  dom.guessesLeft.textContent =
+    `${state.guessesLeft} ${state.guessesLeft === 1 ? 'guess' : 'guesses'} left`;
+  // Once the round is over these reserve empty space above the result, so drop them.
+  dom.guessesLeft.hidden = state.finished;
+  dom.notice.hidden = state.finished;
 
   dom.form.hidden = state.finished;
   dom.skip.hidden = state.finished;
