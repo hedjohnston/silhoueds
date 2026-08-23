@@ -12,6 +12,12 @@ set -uo pipefail
 BRANCH="claude/football-silhouette-game-pqxv6t"
 VOLUME="silhoueds_data"
 
+# fly.toml is written by different tools with different quoting, so read values tolerantly.
+toml_value() {
+  grep -E "^[[:space:]]*$1[[:space:]]*=" fly.toml 2>/dev/null | head -1 \
+    | sed -E "s/^[^=]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"'].*$//; s/[[:space:]]*$//"
+}
+
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$1"; }
 warn() { printf '    \033[33m!\033[0m %s\n' "$1"; }
@@ -51,12 +57,17 @@ fi
 say "Checking fly.toml"
 [ -f fly.toml ] || die "fly.toml is missing entirely — paste this to Claude"
 
-APP=$(grep -E '^app *=' fly.toml | head -1 | sed -E 's/.*"(.*)".*/\1/')
+APP=$(toml_value app)
 [ -n "$APP" ] || die "fly.toml has no app name — paste this to Claude"
 
-if ! fly apps list 2>/dev/null | awk '{print $1}' | grep -qx "$APP"; then
-  die "fly.toml points at an app called '$APP', which isn't in your Fly account.
-       Fix the 'app =' line in fly.toml to your real app name, then re-run this."
+APPS=$(fly apps list 2>/dev/null | awk 'NR>1 {print $1}' | grep -v '^$')
+if [ -z "$APPS" ]; then
+  warn "couldn't list your Fly apps; trusting fly.toml"
+elif ! printf '%s\n' "$APPS" | grep -qx "$APP"; then
+  die "fly.toml names an app called '$APP', which isn't in your Fly account.
+       Your apps are:
+$(printf '%s\n' "$APPS" | sed 's/^/         /')
+       Edit the 'app =' line in fly.toml to one of those, then re-run this."
 fi
 ok "deploying to app: $APP"
 
@@ -105,7 +116,7 @@ say "Making sure the disk exists"
 if fly volumes list -a "$APP" 2>/dev/null | grep -q "$VOLUME"; then
   ok "volume '$VOLUME' already exists"
 else
-  REGION=$(grep -E '^primary_region' fly.toml | head -1 | sed -E 's/.*"(.*)".*/\1/')
+  REGION=$(toml_value primary_region)
   REGION=${REGION:-syd}
   fly volumes create "$VOLUME" --size 1 --region "$REGION" -a "$APP" --yes \
     || die "could not create the volume — paste the error above to Claude"
