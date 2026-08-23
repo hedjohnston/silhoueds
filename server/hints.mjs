@@ -4,9 +4,11 @@
 // asked to draft them in. It lives here rather than in claude.mjs so the game logic can know the
 // order without pulling in the Anthropic SDK.
 //
-// League sits above Nationality deliberately — a league spans many countries, while a nationality
-// cuts the field to a short list and ends the puzzle too early.
-export const HINT_LABELS = ['Position', 'Era', 'League', 'Nationality', 'Best known at'];
+// Era sits first because a span of years barely narrows the field, while a position splits it
+// into a handful of groups. League then sits above Nationality for the same reason — a league
+// spans many countries, while a nationality cuts the field to a short list and ends the puzzle
+// too early.
+export const HINT_LABELS = ['Era', 'Position', 'League', 'Nationality', 'Best known at'];
 
 /**
  * Put a player's hints in ladder order.

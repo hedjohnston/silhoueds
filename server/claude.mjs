@@ -45,8 +45,8 @@ const SYSTEM = `You write clues for a daily football (soccer) guessing game.
 The player sees a silhouette and guesses who it is. Each wrong guess reveals the next hint, so
 the hints run vaguest to most revealing:
 
-1. Position — the role they played, e.g. "Attacking midfielder", "Goalkeeper".
-2. Era — the years they were active as a professional, e.g. "1996 - 2013" or "2015 - present".
+1. Era — the years they were active as a professional, e.g. "1996 - 2013" or "2015 - present".
+2. Position — the role they played, e.g. "Attacking midfielder", "Goalkeeper".
 3. League — the leagues they are most associated with, e.g. "Serie A & La Liga".
 4. Nationality — the country they represented at international level.
 5. Best known at — the club or clubs they are most identified with.
