@@ -4,6 +4,7 @@
 //
 // Safe to re-run: players already present by slug are left alone.
 
+import './env.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

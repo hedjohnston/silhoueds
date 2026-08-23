@@ -11,12 +11,16 @@ right — the browser never receives the answer until the round is over.
 
 ## Running it
 
+Needs Node 22.5 or newer (`node -v`) — the SQLite storage is built into Node from that version.
+
 ```sh
 npm install
 cp .env.example .env          # then fill in the two required values
 npm run seed                  # loads the three starter players
 npm start
 ```
+
+`.env` is read automatically at startup. Anything already set in your shell wins over it.
 
 Game at <http://localhost:3000>, admin at <http://localhost:3000/admin>.
 

@@ -1,5 +1,6 @@
 // Silhoueds server: serves the game, the admin, and the JSON API from one process.
 
+import './env.mjs';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
