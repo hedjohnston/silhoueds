@@ -30,22 +30,26 @@ command -v git >/dev/null || die "git is not installed"
 command -v fly >/dev/null || die "the Fly CLI is not installed. Run: brew install flyctl"
 fly auth whoami >/dev/null 2>&1 || die "not signed in to Fly. Run: fly auth login"
 
-say "Tidying up the repo"
+say "Getting the latest code"
 git fetch origin --quiet || die "could not reach GitHub"
 
-# The lockfile is generated, so the committed version is always the right answer.
-if git ls-files --unmerged | grep -q 'package-lock.json'; then
-  git checkout "origin/$BRANCH" -- package-lock.json || die "could not resolve package-lock.json"
-  git add package-lock.json
-  ok "resolved the package-lock.json conflict"
-else
-  ok "no lockfile conflict"
-fi
+# The app name is the one thing here that is yours rather than mine, so carry it across.
+PREV_APP=$(toml_value app)
 
-# Any other conflicted file is something I can't safely guess at.
+# Keep a way back before touching anything.
+BACKUP="backup/$(date +%Y%m%d-%H%M%S)"
+git branch "$BACKUP" >/dev/null 2>&1 || true
+
+# Clear anything half-finished from an earlier attempt, then take origin's version of every
+# tracked file. Nothing in this repo is edited locally except fly.toml, which is rebuilt below.
+git merge --abort >/dev/null 2>&1 || true
+git rebase --abort >/dev/null 2>&1 || true
+git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -b "$BRANCH" "origin/$BRANCH"
+git reset --hard "origin/$BRANCH" --quiet || die "could not update to the latest code"
+ok "updated to the latest code (previous state kept as branch $BACKUP)"
+
 if [ -n "$(git ls-files --unmerged)" ]; then
-  git ls-files --unmerged | awk '{print "      " $4}' | sort -u
-  die "the files above are still conflicted — paste this output to Claude"
+  die "there are still conflicted files — paste this to Claude"
 fi
 
 if [ -d models ]; then
@@ -58,6 +62,16 @@ say "Checking fly.toml"
 [ -f fly.toml ] || die "fly.toml is missing entirely — paste this to Claude"
 
 APP=$(toml_value app)
+
+# origin's fly.toml carries my app name; put theirs back if it differed.
+if [ -n "$PREV_APP" ] && [ "$PREV_APP" != "$APP" ]; then
+  awk -v app="$PREV_APP" '\
+    /^[[:space:]]*app[[:space:]]*=/ && !seen { print "app = \"" app "\""; seen=1; next } { print }' \
+    fly.toml > fly.toml.tmp && mv fly.toml.tmp fly.toml
+  APP=$PREV_APP
+  ok "kept your app name: $APP"
+fi
+
 [ -n "$APP" ] || die "fly.toml has no app name — paste this to Claude"
 
 APPS=$(fly apps list 2>/dev/null | awk 'NR>1 {print $1}' | grep -v '^$')
