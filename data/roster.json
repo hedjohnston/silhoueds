@@ -1,0 +1,22 @@
+{
+  "_comment": "Names offered by the guess autocomplete. A superset of data/players.json so the suggestion list never gives the answer away.",
+  "names": [
+    "Alessandro Del Piero", "Alfredo Di Stefano", "Andrea Pirlo", "Andres Iniesta",
+    "Arjen Robben", "Bobby Charlton", "Bobby Moore", "Cafu", "Carles Puyol",
+    "Cristiano Ronaldo", "Dennis Bergkamp", "Diego Maradona", "Didier Drogba",
+    "Edson Arantes do Nascimento", "Eden Hazard", "Erling Haaland", "Eusebio",
+    "Ferenc Puskas", "Francesco Totti", "Franco Baresi", "Frank Lampard",
+    "Franz Beckenbauer", "Gareth Bale", "Gary Lineker", "Gerd Muller",
+    "Gianluigi Buffon", "Iker Casillas", "Johan Cruyff", "John Terry",
+    "Jude Bellingham", "Kaka", "Karim Benzema", "Kevin De Bruyne", "Kylian Mbappe",
+    "Lev Yashin", "Lionel Messi", "Luis Figo", "Luis Suarez", "Luka Modric",
+    "Manuel Neuer", "Marco van Basten", "Michael Ballack", "Michel Platini",
+    "Mohamed Salah", "Neymar", "Paolo Maldini", "Patrick Vieira",
+    "Paul Scholes", "Pele", "Philipp Lahm", "Rivaldo", "Robert Lewandowski",
+    "Roberto Baggio", "Roberto Carlos", "Romario", "Ronaldinho", "Ronaldo Nazario",
+    "Roy Keane", "Ruud Gullit", "Ryan Giggs", "Sergio Ramos", "Sergio Aguero",
+    "Steven Gerrard", "Thierry Henry", "Thomas Muller", "Vinicius Junior",
+    "Virgil van Dijk", "Wayne Rooney", "Xabi Alonso", "Xavi", "Zico",
+    "Zinedine Zidane", "Zlatan Ibrahimovic"
+  ]
+}

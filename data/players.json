@@ -1,0 +1,43 @@
+{
+  "players": [
+    {
+      "id": "cristiano-ronaldo",
+      "name": "Cristiano Ronaldo",
+      "aliases": ["ronaldo", "cr7", "cristiano"],
+      "silhouette": "public/silhouettes/cristiano-ronaldo.svg",
+      "hints": [
+        { "label": "Position", "value": "Forward" },
+        { "label": "Nationality", "value": "Portugal" },
+        { "label": "Era", "value": "2002 – present" },
+        { "label": "League", "value": "Premier League, La Liga, Serie A, Saudi Pro League" },
+        { "label": "Best known at", "value": "Real Madrid & Manchester United" }
+      ]
+    },
+    {
+      "id": "diego-maradona",
+      "name": "Diego Maradona",
+      "aliases": ["maradona", "diego", "diego armando maradona"],
+      "silhouette": "public/silhouettes/diego-maradona.svg",
+      "hints": [
+        { "label": "Position", "value": "Attacking midfielder" },
+        { "label": "Nationality", "value": "Argentina" },
+        { "label": "Era", "value": "1976 – 1997" },
+        { "label": "League", "value": "Serie A & La Liga" },
+        { "label": "Best known at", "value": "Napoli" }
+      ]
+    },
+    {
+      "id": "zinedine-zidane",
+      "name": "Zinedine Zidane",
+      "aliases": ["zidane", "zizou", "zinedine"],
+      "silhouette": "public/silhouettes/zinedine-zidane.svg",
+      "hints": [
+        { "label": "Position", "value": "Attacking midfielder" },
+        { "label": "Nationality", "value": "France" },
+        { "label": "Era", "value": "1989 – 2006" },
+        { "label": "League", "value": "Ligue 1, Serie A, La Liga" },
+        { "label": "Best known at", "value": "Real Madrid & Juventus" }
+      ]
+    }
+  ]
+}

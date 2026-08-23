@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Silhoueds — the daily football silhouette</title>
+  <meta name="description" content="One footballer a day, in silhouette. Six guesses, and a new hint every time you miss.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='4' r='3'/><path d='M4 16 Q8 6 12 16z'/></svg>">
+</head>
+<body>
+  <main class="card">
+    <header class="header">
+      <h1 class="logo">Silhoueds</h1>
+      <p class="tagline">Name the footballer from their shadow.</p>
+      <p class="date" id="puzzle-date"></p>
+    </header>
+
+    <div class="stage">
+      <div class="silhouette" id="silhouette" role="img" aria-label="Today's silhouette"></div>
+    </div>
+
+    <ul class="hints" id="hints" aria-live="polite" aria-label="Hints"></ul>
+
+    <ol class="history" id="guess-history" aria-label="Your guesses"></ol>
+
+    <p class="guesses-left" id="guesses-left" aria-live="polite"></p>
+
+    <form class="guess-form" id="guess-form" autocomplete="off">
+      <div class="input-wrap">
+        <label class="visually-hidden" for="guess-input">Your guess</label>
+        <input
+          id="guess-input"
+          type="text"
+          placeholder="Type a player's name…"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="suggestions"
+          aria-autocomplete="list"
+          enterkeyhint="go">
+        <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
+      </div>
+      <button class="primary" type="submit">Guess</button>
+    </form>
+
+    <button class="ghost" id="skip-button" type="button">Skip — reveal a hint</button>
+
+    <section class="result" id="result" hidden aria-live="polite">
+      <h2 class="result-title" id="result-title"></h2>
+      <p class="result-name" id="result-name"></p>
+      <button class="primary" id="share-button" type="button">Share result</button>
+      <p class="share-status" id="share-status" aria-live="polite"></p>
+      <p class="comeback">A new silhouette lands at midnight UTC.</p>
+    </section>
+  </main>
+
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>

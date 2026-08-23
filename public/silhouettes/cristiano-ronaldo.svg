@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="Silhouette of a footballer standing with legs apart and arms held out and back">
+  <g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- arms: out and slightly back, fists clenched -->
+    <path d="M172 128 L118 176 L80 208" fill="none" stroke-width="25"/>
+    <path d="M228 128 L282 176 L320 208" fill="none" stroke-width="25"/>
+    <circle cx="76" cy="212" r="15"/>
+    <circle cx="324" cy="212" r="15"/>
+    <!-- legs: planted wide -->
+    <path d="M184 236 L152 344 L132 448" fill="none" stroke-width="35"/>
+    <path d="M216 236 L248 344 L268 448" fill="none" stroke-width="35"/>
+    <!-- boots -->
+    <path d="M132 448 q-6 22 -2 30 l-52 6 q-8 -14 6 -22 l30 -16 z"/>
+    <path d="M268 448 q6 22 2 30 l52 6 q8 -14 -6 -22 l-30 -16 z"/>
+    <!-- torso, tapering to the waist -->
+    <path d="M168 118 q32 -12 64 0 l12 74 q-8 44 -14 56 l-60 0 q-6 -12 -14 -56 z"/>
+    <!-- shoulders -->
+    <ellipse cx="172" cy="126" rx="20" ry="17"/>
+    <ellipse cx="228" cy="126" rx="20" ry="17"/>
+    <!-- neck and head -->
+    <rect x="188" y="96" width="24" height="26" rx="10"/>
+    <ellipse cx="200" cy="76" rx="27" ry="31"/>
+    <path d="M175 66 q25 -26 50 0 q-25 -12 -50 0 z"/>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="Silhouette of a footballer with curly hair dribbling a ball at speed">
+  <g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- trailing arm, out for balance -->
+    <path d="M166 152 L108 158 L74 132" fill="none" stroke-width="23"/>
+    <circle cx="70" cy="128" r="14"/>
+    <!-- legs mid-stride: left planted, right swinging through to the ball -->
+    <path d="M186 254 L142 338 L158 436" fill="none" stroke-width="33"/>
+    <path d="M214 250 L266 320 L306 392" fill="none" stroke-width="33"/>
+    <path d="M158 436 q-8 20 -4 28 l-50 4 q-8 -13 5 -21 l28 -15 z"/>
+    <path d="M306 392 q14 12 16 22 l-30 22 q-12 -8 -6 -20 z"/>
+    <!-- torso, leaning into the run -->
+    <path d="M162 138 q34 -16 66 -4 l14 74 q-6 34 -12 46 l-58 4 q-10 -14 -18 -50 z"/>
+    <ellipse cx="168" cy="146" rx="20" ry="17"/>
+    <ellipse cx="226" cy="140" rx="20" ry="17"/>
+    <!-- leading arm, tucked across the body -->
+    <path d="M226 148 L268 186 L296 160" fill="none" stroke-width="23"/>
+    <circle cx="300" cy="156" r="14"/>
+    <!-- neck and head -->
+    <rect x="182" y="110" width="24" height="28" rx="10"/>
+    <ellipse cx="196" cy="92" rx="26" ry="29"/>
+    <!-- mop of curls -->
+    <g>
+      <circle cx="172" cy="74" r="17"/><circle cx="196" cy="60" r="19"/>
+      <circle cx="221" cy="72" r="17"/><circle cx="228" cy="94" r="14"/>
+      <circle cx="166" cy="97" r="14"/><circle cx="182" cy="62" r="14"/>
+      <circle cx="211" cy="58" r="14"/>
+    </g>
+    <!-- the ball -->
+    <circle cx="336" cy="452" r="31"/>
+  </g>
+</svg>
