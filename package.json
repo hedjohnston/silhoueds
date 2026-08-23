@@ -13,7 +13,6 @@
     "seed": "node --disable-warning=ExperimentalWarning server/seed.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.120.0",
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "zod": "^4.1.13"

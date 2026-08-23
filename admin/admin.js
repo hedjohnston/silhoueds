@@ -3,7 +3,7 @@ import { createTracer } from './trace.js';
 const el = (id) => document.getElementById(id);
 const dom = Object.fromEntries(
   [
-    'login', 'login-form', 'login-error', 'password', 'app', 'logout', 'claude-state',
+    'login', 'login-form', 'login-error', 'password', 'app', 'logout',
     'add-form', 'new-name', 'new-photo', 'new-silhouette', 'add-error', 'players', 'counts',
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
@@ -112,30 +112,8 @@ function renderPlayers() {
     aliasLabel.textContent = 'Also accepted';
     aliasLabel.append(aliasField);
 
-    const source = document.createElement('p');
-    source.className = 'source';
-    source.textContent =
-      player.hint_source === 'claude' ? 'Hints drafted by Claude — review before publishing.' : '';
-
     const actions = document.createElement('div');
     actions.className = 'player-actions';
-
-    const generate = document.createElement('button');
-    generate.className = 'ghost';
-    generate.textContent = 'Generate hints with Claude';
-    generate.onclick = async () => {
-      generate.disabled = true;
-      generate.textContent = 'Asking Claude…';
-      try {
-        const { note } = await api(`/api/admin/players/${player.id}/hints`, { method: 'POST' });
-        await refresh();
-        if (note) alert(`Claude noted: ${note}`);
-      } catch (error) {
-        alert(error.message);
-        generate.disabled = false;
-        generate.textContent = 'Generate hints with Claude';
-      }
-    };
 
     const replace = document.createElement('button');
     replace.className = 'ghost';
@@ -192,8 +170,8 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(replace, generate, trace, save, publish, remove);
-    details.append(hints, aliasLabel, source, actions);
+    actions.append(replace, trace, save, publish, remove);
+    details.append(hints, aliasLabel, actions);
     body.append(art, details);
     card.append(head, body);
     dom.players.append(card);
@@ -519,13 +497,10 @@ dom['schedule-form'].onsubmit = async (event) => {
 // --- boot ----------------------------------------------------------------
 
 async function start() {
-  const { signedIn, claudeConfigured, storage } = await api('/api/admin/session');
+  const { signedIn, storage } = await api('/api/admin/session');
   dom.login.hidden = signedIn;
   dom.app.hidden = !signedIn;
   if (!signedIn) return;
-
-  dom['claude-state'].textContent = claudeConfigured ? 'Claude connected' : 'No ANTHROPIC_API_KEY set';
-  dom['claude-state'].className = `claude-state ${claudeConfigured ? 'ok' : 'warn'}`;
 
   // The one failure that silently destroys work: writing to a disk that isn't persistent.
   const ephemeral = storage && storage.checked && !storage.mounted;

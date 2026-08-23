@@ -30,7 +30,6 @@ Two environment variables are required and the server refuses to boot without th
 | --- | --- |
 | `SILHOUEDS_SECRET` | Signs the admin and play-session cookies |
 | `SILHOUEDS_ADMIN_PASSWORD` | The password for `/admin` |
-| `ANTHROPIC_API_KEY` | Optional — only for generating hints with Claude |
 | `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `UTC` (see below) |
 | `SILHOUEDS_PUBLIC_URL` | Optional — only behind a proxy that rewrites the host |
 
@@ -47,9 +46,9 @@ In the admin, type the name and upload two images:
 | **Silhouette** | The puzzle itself — what players see and guess from |
 | **Full photo** | Revealed in place of the silhouette once the round ends |
 
-Claude drafts the hints and the accepted spellings from the name. Everything lands on a draft;
-**Publish** is refused until a player has artwork and at least one hint. Use **Replace images** to
-swap either image later.
+Add the hints and accepted spellings by hand once the player is created. **Publish** is refused
+until a player has artwork and at least one hint. Use **Replace images** to swap either image
+later.
 
 For a player you have no silhouette image for, **Trace by hand** in the admin lets you click an
 outline around the photo instead.
@@ -57,13 +56,6 @@ outline around the photo instead.
 The full photo is served only to a visitor whose round is already over — before that the endpoint
 returns 403, so it cannot be fetched early to look up the answer. Neither image is reachable by
 guessing a path; both go through the API.
-
-### What is sent to Claude
-
-Only the name you typed. The reference photo is never sent — you already know who the player is,
-so there is nothing to identify, and keeping photos out of the request avoids using the model for
-face recognition. Your images never leave your machine at all. Claude is asked to report
-`known: false` rather than invent a career for a name it doesn't recognise.
 
 ## Difficulty
 
@@ -142,7 +134,7 @@ and casing, then allows a small edit distance that scales with name length — s
 note that the spelling was off. Short names stay strict, so `Pepe` never matches `Pele`.
 
 Each player also carries an alias list (surname alone, nicknames, common misspellings), which
-Claude drafts and you can edit.
+you enter and edit by hand.
 
 ## Look
 
@@ -159,7 +151,6 @@ the viewer's system theme.
 | `server/db.mjs` | SQLite schema and queries |
 | `server/game.mjs` | Round logic: scheduling, hint reveal, win/lose |
 | `server/matching.mjs` | Name normalisation and fuzzy matching |
-| `server/claude.mjs` | Hint generation via the Claude API |
 | `server/auth.mjs` | Signed admin and play-session cookies |
 | `server/routes-game.mjs`, `server/routes-admin.mjs` | HTTP endpoints |
 | `server/seed.mjs` | Loads the three starter players |
@@ -241,8 +232,7 @@ fly launch --no-deploy            # pick a name; keep the existing fly.toml when
 fly volumes create silhoueds_data --size 1        # the persistent disk
 fly secrets set \
   SILHOUEDS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" \
-  SILHOUEDS_ADMIN_PASSWORD='pick-a-strong-password' \
-  ANTHROPIC_API_KEY='sk-ant-...'
+  SILHOUEDS_ADMIN_PASSWORD='pick-a-strong-password'
 fly deploy
 fly scale count 1                 # exactly one machine — see below
 ```
@@ -264,7 +254,7 @@ The `Dockerfile` is generic — it works on Railway, Render, a VPS, or anything 
 container. Whatever you use:
 
 - Mount a persistent volume at `/data` (the image already points both paths there).
-- Set `SILHOUEDS_SECRET`, `SILHOUEDS_ADMIN_PASSWORD`, and `ANTHROPIC_API_KEY`.
+- Set `SILHOUEDS_SECRET` and `SILHOUEDS_ADMIN_PASSWORD`.
 - Serve it over HTTPS. `NODE_ENV=production` is set in the image, which marks the cookies
   `Secure` — over plain HTTP browsers will drop them and nobody will stay signed in.
 - Run one instance.

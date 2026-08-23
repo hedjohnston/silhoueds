@@ -7,7 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { players, schedule, plays } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
-import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
+import { HINT_LABELS } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, playerForDate } from './game.mjs';
@@ -79,7 +79,6 @@ adminRouter.post('/logout', (req, res) => {
 adminRouter.get('/session', (req, res) => {
   res.json({
     signedIn: isAdmin(req),
-    claudeConfigured: hasApiKey(),
     storage: storageStatus(),
     hintLabels: HINT_LABELS,
   });
@@ -94,11 +93,7 @@ adminRouter.get('/players', (req, res) => {
   });
 });
 
-/**
- * Create a player from a typed name plus their two images, and — unless asked not to — draft
- * the hints with Claude straight away. That step is best-effort; a failure is reported and can
- * be retried from the player's card.
- */
+/** Create a player from a typed name plus their two images. Hints are entered by hand. */
 const uploads = upload.fields([
   { name: 'silhouette', maxCount: 1 },
   { name: 'photo', maxCount: 1 },
@@ -111,7 +106,7 @@ adminRouter.post('/players', uploads, async (req, res) => {
   const silhouetteFile = req.files?.silhouette?.[0]?.filename ?? null;
   const photoFile = req.files?.photo?.[0]?.filename ?? null;
 
-  let player = players.create({
+  const player = players.create({
     slug: uniqueSlug(name),
     name,
     photo: photoFile,
@@ -119,28 +114,7 @@ adminRouter.post('/players', uploads, async (req, res) => {
     revealImage: photoFile,
   });
 
-  const steps = {};
-  if (req.body?.auto !== 'false') {
-    if (hasApiKey()) {
-      try {
-        const result = await generateHints(player.name);
-        if (result.known) {
-          player = players.update(player.id, {
-            hints: result.hints,
-            aliases: [...new Set([...player.aliases, ...result.aliases])],
-            hint_source: 'claude',
-          });
-          steps.hints = 'done';
-        } else {
-          steps.hints = `Claude does not recognise "${player.name}" — check the spelling.`;
-        }
-      } catch (error) {
-        steps.hints = error.message;
-      }
-    }
-  }
-
-  res.status(201).json({ player: { ...player, missing: readiness(player) }, steps });
+  res.status(201).json({ player: { ...player, missing: readiness(player) } });
 });
 
 // Replace either image on an existing player.
@@ -171,40 +145,6 @@ adminRouter.post('/players/:id/images', uploads, (req, res) => {
   res.json({ player: { ...updated, missing: readiness(updated) } });
 });
 
-// Ask Claude for hints and aliases. Saves them as a draft for review — never publishes.
-adminRouter.post('/players/:id/hints', async (req, res) => {
-  const player = players.get(Number(req.params.id));
-  if (!player) return res.status(404).json({ error: 'No such player' });
-  if (!hasApiKey()) {
-    return res.status(503).json({
-      error: 'ANTHROPIC_API_KEY is not set on the server, so hints cannot be generated.',
-    });
-  }
-
-  try {
-    const result = await generateHints(player.name);
-    if (!result.known) {
-      return res.status(422).json({
-        error: `Claude does not recognise "${player.name}" as a footballer. Check the spelling.`,
-        note: result.note,
-      });
-    }
-    const updated = players.update(player.id, {
-      hints: result.hints,
-      // Keep any aliases already entered by hand.
-      aliases: [...new Set([...player.aliases, ...result.aliases])],
-      hint_source: 'claude',
-    });
-    res.json({
-      player: { ...updated, missing: readiness(updated) },
-      note: result.note,
-      canonicalName: result.canonicalName,
-      usage: result.usage,
-    });
-  } catch (error) {
-    res.status(502).json({ error: `Claude request failed: ${error.message}` });
-  }
-});
 
 adminRouter.patch('/players/:id', (req, res) => {
   const player = players.get(Number(req.params.id));
@@ -271,12 +211,12 @@ adminRouter.put('/schedule/:date', (req, res) => {
     return res.status(400).json({ error: 'That player is still a draft.' });
   }
   schedule.set(date, player.id);
-  res.json({ ok: true, upcoming: schedule.upcoming() });
+  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req))) });
 });
 
 adminRouter.delete('/schedule/:date', (req, res) => {
   schedule.clear(req.params.date);
-  res.json({ ok: true, upcoming: schedule.upcoming() });
+  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req))) });
 });
 
 /**

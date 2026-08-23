@@ -289,6 +289,22 @@ async function send(path, body) {
   }
 }
 
+/**
+ * One line noting anything that makes the win less than clean — hints revealed, a skip used, or
+ * a loss — so the grid doesn't read as tidier than the round actually was. Counts only: never the
+ * hints themselves or the answer.
+ */
+function shareCaveat() {
+  if (!state.won) return "Didn't get it";
+
+  const notes = [];
+  if (state.hints.length > 0) {
+    notes.push(`${state.hints.length} hint${state.hints.length === 1 ? '' : 's'}`);
+  }
+  if (state.guesses.some((guess) => guess.skipped)) notes.push('a skip');
+  return notes.length > 0 ? `With ${notes.join(' and ')}` : '';
+}
+
 /** Wordle-style grid: one square per guess, green only on the winning one. */
 function shareGrid() {
   const squares = state.guesses
@@ -296,13 +312,17 @@ function shareGrid() {
     .join('');
   const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
   const marker = state.mode === 'easy' ? ' easy' : '';
-  return `Silhoueds ${state.date} ${score}${marker}\n${squares}`;
+  const caveat = shareCaveat();
+  const caveatLine = caveat ? `\n${caveat}` : '';
+  return `Silhoueds ${state.date} ${score}${marker}\n${squares}${caveatLine}`;
 }
 
 /** Grid plus link, for when we're pasting text rather than handing over a URL separately. */
 function shareText() {
-  // The link is the point: without it nobody who sees this can find the game.
-  return `${shareGrid()}\n${location.origin}`;
+  // The link is the point: without it nobody who sees this can find the game. A blank line before
+  // it keeps WhatsApp/iMessage/Telegram from treating the score line as part of the link preview —
+  // without one they scope the link's styling to the whole paragraph it sits in.
+  return `${shareGrid()}\n\n${location.origin}`;
 }
 
 /** Four figures and a bar per guess count, so a win reads in context. */

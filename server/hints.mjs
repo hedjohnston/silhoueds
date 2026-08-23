@@ -1,8 +1,4 @@
-// The hint ladder, vaguest first.
-//
-// Order matters twice over: it is the sequence hints are revealed in, and the sequence Claude is
-// asked to draft them in. It lives here rather than in claude.mjs so the game logic can know the
-// order without pulling in the Anthropic SDK.
+// The hint ladder, vaguest first — the sequence hints are revealed in.
 //
 // Era sits first because a span of years barely narrows the field, while a position splits it
 // into a handful of groups. League then sits above Nationality for the same reason — a league

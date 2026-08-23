@@ -85,10 +85,6 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 .topbar a { color: var(--muted); font-weight: 700; }
 
-.claude-state { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 2px solid var(--edge); background: #fff; }
-.claude-state.ok { background: var(--ok); }
-.claude-state.warn { background: #ffa7a7; }
-
 .panel { background: var(--panel); border: 3px solid var(--edge); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
 .panel-head { display: flex; justify-content: space-between; align-items: baseline; }
 .counts { color: var(--muted); font-size: 14px; margin: 0; }
@@ -134,8 +130,6 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
 .alias-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .alias-label input { text-transform: none; letter-spacing: normal; font-size: 15px; }
-
-.source { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; min-height: 18px; }
 
 .player-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
