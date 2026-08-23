@@ -49,6 +49,20 @@ git fetch origin --quiet || die "could not reach GitHub"
 BRANCH=$(resolve_branch)
 ok "tracking branch: $BRANCH"
 
+# Deploying a branch that the default branch has moved past ships stale code, silently. That has
+# happened enough times to be worth stopping for.
+DEFAULT=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+DEFAULT=${DEFAULT:-main}
+if [ "$BRANCH" != "$DEFAULT" ] && git rev-parse --verify --quiet "origin/$DEFAULT" >/dev/null 2>&1; then
+  BEHIND=$(git rev-list --count "origin/$BRANCH..origin/$DEFAULT" 2>/dev/null || echo 0)
+  if [ "${BEHIND:-0}" -gt 0 ]; then
+    die "you are on '$BRANCH', which is $BEHIND commit(s) behind '$DEFAULT'.
+       Deploying now would ship older code. Switch over first:
+
+         git checkout $DEFAULT && git pull && bash deploy.sh"
+  fi
+fi
+
 # The app name is the one thing here that is yours rather than mine, so carry it across.
 PREV_APP=$(toml_value app)
 
