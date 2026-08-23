@@ -99,6 +99,11 @@ Hard mode is unaffected: its photo is never sent early.
 - **Sharing** — the button opens the phone's own share sheet where there is one (iOS, Android,
   most desktop browsers), falling back to the clipboard. The link is passed separately from the
   grid so it doesn't appear twice in the message.
+- **Link previews** — two images, because platforms crop differently. `og:image` is
+  `preview-square.png` (1200×1200), since WhatsApp, iMessage and Slack crop to a square and a
+  landscape card is reduced to a sliver of its middle. `twitter:image` stays
+  `preview.png` (1200×630) for the wide card. Regenerate both with
+  `node tools/make-preview.mjs`.
 - **Installable** — a web manifest and an `apple-touch-icon`, so the game can be added to the
   Home Screen and opens without browser chrome. Icons are committed; regenerate them with
   `node tools/make-icons.mjs --source assets/icon-source.jpg`, which needs Playwright via `npx`
