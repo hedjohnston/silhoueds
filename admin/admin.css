@@ -167,3 +167,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .tracer-controls label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.tracer-rule { width: 100%; border: none; border-top: 1px solid var(--edge); margin: 4px 0; }
+.tracer-controls input[type="range"] { flex: 1; }
+.player-actions button:disabled { opacity: 0.4; cursor: not-allowed; }

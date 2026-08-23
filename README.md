@@ -38,24 +38,40 @@ is web-served; back up both to keep your players.
 
 ## Adding a footballer
 
-In the admin:
+In the admin, type the name, choose a photo, press **Add**. That one step does the rest:
 
-1. **Add** — type the name and pick a reference photo. The player is created as a **draft**.
-2. **Generate hints with Claude** — drafts the five hints plus a set of accepted spellings.
-   Everything lands in editable fields; nothing is published automatically.
-3. **Trace silhouette** — click around the outline in the photo to drop points. Drag to move one,
-   click it to remove it, and the shape closes itself. The preview shows what players will see.
-4. **Publish** — only possible once the player has both artwork and at least one hint.
+- **The silhouette is cut out of the photo automatically** — U^2-Net runs locally through
+  onnxruntime, the largest subject is kept, and the outline is traced and simplified into an
+  SVG path. About half a second per photo. Nothing is uploaded anywhere.
+- **Claude drafts the hints and accepted spellings** from the name.
 
-Published players enter the rotation. Unscheduled days auto-assign a live player, preferring ones
-not already queued; use the **Schedule** panel to pin a specific player to a specific date.
+Both land on a draft for you to review. **Publish** is refused until a player has artwork and at
+least one hint.
+
+If the cut-out isn't right, open **Touch up by hand**: nudge the cut-off slider and re-run the
+auto-trace, or click points around the outline yourself. Full-body photos with the player clear
+of the background give the best results; a busy crowd behind them is fine.
 
 ### What is sent to Claude
 
 Only the name you typed. The reference photo is never sent — you already know who the player is,
 so there is nothing to identify, and keeping photos out of the request avoids using the model for
-face recognition. Generated hints are always a draft for you to review, and Claude is asked to
-report `known: false` rather than invent a career for a name it doesn't recognise.
+face recognition. Segmentation is entirely local, so photos never leave your machine at all.
+Claude is asked to report `known: false` rather than invent a career for a name it doesn't
+recognise.
+
+### If automatic silhouettes are unavailable
+
+`onnxruntime-node` and `sharp` are **optional** dependencies, and the model is fetched on install.
+If either step fails, the app still runs — the admin says so at the top and hand-tracing still
+works. To retry the model download:
+
+```sh
+npm run fetch-model
+```
+
+The model is U^2-Net (u2netp, 4.4 MB, Apache-2.0), verified by checksum on download and stored in
+`models/`, which is git-ignored.
 
 ## Guess matching
 
@@ -80,8 +96,10 @@ Claude drafts and you can edit.
 | `server/routes-game.mjs`, `server/routes-admin.mjs` | HTTP endpoints |
 | `server/seed.mjs` | Loads the three starter players |
 | `public/` | The game the players see |
-| `admin/` | Admin UI, including the click-to-trace editor |
-| `tools/trace-helper.mjs` | Offline tracing page, for drawing silhouettes outside the admin |
+| `admin/` | Admin UI, including the silhouette editor |
+| `server/segment.mjs` | Photo to silhouette: local segmentation |
+| `server/vectorise.mjs` | Mask to SVG: component pick, boundary trace, simplify |
+| `tools/fetch-model.mjs` | Downloads the segmentation model |
 
 ## API
 
@@ -95,7 +113,8 @@ Public:
 
 Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
 /api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,
-`GET /api/admin/players/:id/photo`, `GET|PUT|DELETE /api/admin/schedule[/:date]`.
+`POST /api/admin/players/:id/silhouette`, `GET /api/admin/players/:id/photo`,
+`GET|PUT|DELETE /api/admin/schedule[/:date]`.
 
 ## Deploying
 

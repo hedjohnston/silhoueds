@@ -8,12 +8,14 @@ const dom = Object.fromEntries(
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
+    'tracer-auto', 'tracer-threshold', 'seg-state',
   ].map((id) => [id, el(id)]),
 );
 
 let players = [];
 let hintLabels = [];
 let tracingPlayer = null;
+let segmentation = { available: false };
 
 async function api(path, { method = 'GET', body, form } = {}) {
   const options = { method };
@@ -115,9 +117,31 @@ function renderPlayers() {
       }
     };
 
+    const auto = document.createElement('button');
+    auto.className = 'ghost';
+    auto.textContent = player.silhouette ? 'Redo silhouette from photo' : 'Make silhouette from photo';
+    auto.disabled = !player.photo || !segmentation.available;
+    auto.title = !player.photo
+      ? 'This player has no reference photo.'
+      : segmentation.available
+        ? 'Cut the player out of their photo automatically.'
+        : 'Automatic silhouettes are unavailable — see the note at the top.';
+    auto.onclick = async () => {
+      auto.disabled = true;
+      auto.textContent = 'Tracing…';
+      try {
+        await api(`/api/admin/players/${player.id}/silhouette`, { method: 'POST' });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+        auto.disabled = false;
+        auto.textContent = 'Make silhouette from photo';
+      }
+    };
+
     const trace = document.createElement('button');
     trace.className = 'ghost';
-    trace.textContent = player.silhouette ? 'Retrace silhouette' : 'Trace silhouette';
+    trace.textContent = player.silhouette ? 'Touch up by hand' : 'Trace by hand';
     trace.onclick = () => openTracer(player);
 
     const save = document.createElement('button');
@@ -165,7 +189,7 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(generate, trace, save, publish, remove);
+    actions.append(auto, generate, trace, save, publish, remove);
     details.append(hints, aliasLabel, source, actions);
     body.append(art, details);
     card.append(head, body);
@@ -247,6 +271,26 @@ function openTracer(player) {
   dom.tracer.showModal();
 }
 
+dom['tracer-auto'].onclick = async () => {
+  const button = dom['tracer-auto'];
+  button.disabled = true;
+  button.textContent = 'Tracing…';
+  showError(dom['tracer-error'], '');
+  try {
+    await api(`/api/admin/players/${tracingPlayer.id}/silhouette`, {
+      method: 'POST',
+      body: { threshold: Number(dom['tracer-threshold'].value) / 100 },
+    });
+    dom.tracer.close();
+    await refresh();
+  } catch (error) {
+    showError(dom['tracer-error'], error);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Auto-trace at this cut-off';
+  }
+};
+
 dom['tracer-smooth'].onchange = (e) => tracer.setSmooth(e.target.checked);
 dom['tracer-undo'].onclick = () => tracer.undo();
 dom['tracer-clear'].onclick = () => tracer.clear();
@@ -293,12 +337,22 @@ dom['add-form'].onsubmit = async (event) => {
   const form = new FormData();
   form.append('name', dom['new-name'].value.trim());
   if (dom['new-photo'].files[0]) form.append('photo', dom['new-photo'].files[0]);
+  const button = dom['add-form'].querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Working…';
   try {
-    await api('/api/admin/players', { method: 'POST', form });
+    const { steps } = await api('/api/admin/players', { method: 'POST', form });
     dom['add-form'].reset();
     await refresh();
+    const problems = Object.entries(steps ?? {})
+      .filter(([, value]) => value !== 'done')
+      .map(([step, value]) => `${step}: ${value}`);
+    showError(dom['add-error'], problems.join(' · '));
   } catch (error) {
     showError(dom['add-error'], error);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Add';
   }
 };
 
@@ -319,13 +373,21 @@ dom['schedule-form'].onsubmit = async (event) => {
 // --- boot ----------------------------------------------------------------
 
 async function start() {
-  const { signedIn, claudeConfigured } = await api('/api/admin/session');
+  const { signedIn, claudeConfigured, segmentation: seg } = await api('/api/admin/session');
+  segmentation = seg ?? { available: false };
   dom.login.hidden = signedIn;
   dom.app.hidden = !signedIn;
   if (!signedIn) return;
 
   dom['claude-state'].textContent = claudeConfigured ? 'Claude connected' : 'No ANTHROPIC_API_KEY set';
   dom['claude-state'].className = `claude-state ${claudeConfigured ? 'ok' : 'warn'}`;
+
+  dom['seg-state'].textContent = segmentation.available
+    ? 'Auto silhouettes on'
+    : segmentation.modulesInstalled
+      ? 'No model — run: npm run fetch-model'
+      : 'Auto silhouettes off — onnxruntime-node not installed';
+  dom['seg-state'].className = `claude-state ${segmentation.available ? 'ok' : 'warn'}`;
   await refresh();
 }
 

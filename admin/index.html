@@ -22,6 +22,7 @@
       <h1>Silhoueds admin</h1>
       <div class="topbar-actions">
         <span class="claude-state" id="claude-state"></span>
+        <span class="claude-state" id="seg-state"></span>
         <a href="/" target="_blank" rel="noopener">View game</a>
         <button class="ghost" id="logout">Sign out</button>
       </div>
@@ -41,8 +42,10 @@
         <button class="primary" type="submit">Add</button>
       </form>
       <p class="hint-text">
-        The photo stays on your server — it's what you trace the silhouette against. Only the
-        name is sent to Claude to draft the hints, and nothing goes live until you publish it.
+        Adding a player does the rest automatically: the silhouette is cut out of the photo on
+        this machine, and Claude drafts the hints from the name alone. The photo is never sent
+        anywhere, and nothing goes live until you publish it. Full-body photos with the player
+        clear of the background work best.
       </p>
       <p class="error" id="add-error" role="alert"></p>
     </section>
@@ -74,8 +77,9 @@
     <form method="dialog" class="tracer-close"><button aria-label="Close">✕</button></form>
     <h2 id="tracer-title">Trace silhouette</h2>
     <p class="hint-text">
-      Click around the outline to drop points. Drag a point to move it, click one to remove it.
-      The shape closes automatically — aim for the overall pose, not every finger.
+      Auto-tracing usually gets it. If the cut-out grabbed too much or too little, nudge the
+      cut-off and run it again. To fix it by hand, click around the outline to drop points —
+      drag one to move it, click it to remove it, and the shape closes itself.
     </p>
     <div class="tracer-body">
       <div class="tracer-stage" id="tracer-stage">
@@ -86,6 +90,12 @@
         <h3>Preview</h3>
         <div class="preview-box" id="tracer-preview"></div>
         <div class="tracer-controls">
+          <label>
+            <input type="range" id="tracer-threshold" min="20" max="80" value="50">
+            Cut-off
+          </label>
+          <button class="primary" id="tracer-auto" type="button">Auto-trace at this cut-off</button>
+          <hr class="tracer-rule">
           <label><input type="checkbox" id="tracer-smooth" checked> Smooth curve</label>
           <label><input type="range" id="tracer-dim" min="0" max="100" value="55"> Photo fade</label>
           <button class="ghost" id="tracer-undo" type="button">Undo point</button>
