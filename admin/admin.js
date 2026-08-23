@@ -8,14 +8,13 @@ const dom = Object.fromEntries(
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
-    'tracer-auto', 'tracer-threshold', 'seg-state', 'storage-alarm',
+    'storage-alarm',
   ].map((id) => [id, el(id)]),
 );
 
 let players = [];
 let hintLabels = [];
 let tracingPlayer = null;
-let segmentation = { available: false };
 
 async function api(path, { method = 'GET', body, form } = {}) {
   const options = { method };
@@ -131,28 +130,6 @@ function renderPlayers() {
     replace.textContent = 'Replace images';
     replace.onclick = () => openImagePicker(player);
 
-    const auto = document.createElement('button');
-    auto.className = 'ghost';
-    auto.textContent = 'Auto-cut from photo';
-    auto.disabled = !player.photo || !segmentation.available;
-    auto.title = !player.photo
-      ? 'This player has no reference photo.'
-      : segmentation.available
-        ? 'Cut the player out of their photo automatically.'
-        : 'Automatic silhouettes are unavailable — see the note at the top.';
-    auto.onclick = async () => {
-      auto.disabled = true;
-      auto.textContent = 'Tracing…';
-      try {
-        await api(`/api/admin/players/${player.id}/silhouette`, { method: 'POST' });
-        await refresh();
-      } catch (error) {
-        alert(error.message);
-        auto.disabled = false;
-        auto.textContent = 'Make silhouette from photo';
-      }
-    };
-
     const trace = document.createElement('button');
     trace.className = 'ghost';
     trace.textContent = player.silhouette_image || player.silhouette ? 'Touch up by hand' : 'Trace by hand';
@@ -203,7 +180,7 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(replace, auto, generate, trace, save, publish, remove);
+    actions.append(replace, generate, trace, save, publish, remove);
     details.append(hints, aliasLabel, source, actions);
     body.append(art, details);
     card.append(head, body);
@@ -308,26 +285,6 @@ function openTracer(player) {
   dom.tracer.showModal();
 }
 
-dom['tracer-auto'].onclick = async () => {
-  const button = dom['tracer-auto'];
-  button.disabled = true;
-  button.textContent = 'Tracing…';
-  showError(dom['tracer-error'], '');
-  try {
-    await api(`/api/admin/players/${tracingPlayer.id}/silhouette`, {
-      method: 'POST',
-      body: { threshold: Number(dom['tracer-threshold'].value) / 100 },
-    });
-    dom.tracer.close();
-    await refresh();
-  } catch (error) {
-    showError(dom['tracer-error'], error);
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Auto-trace at this cut-off';
-  }
-};
-
 dom['tracer-smooth'].onchange = (e) => tracer.setSmooth(e.target.checked);
 dom['tracer-undo'].onclick = () => tracer.undo();
 dom['tracer-clear'].onclick = () => tracer.clear();
@@ -411,8 +368,7 @@ dom['schedule-form'].onsubmit = async (event) => {
 // --- boot ----------------------------------------------------------------
 
 async function start() {
-  const { signedIn, claudeConfigured, segmentation: seg, storage } = await api('/api/admin/session');
-  segmentation = seg ?? { available: false };
+  const { signedIn, claudeConfigured, storage } = await api('/api/admin/session');
   dom.login.hidden = signedIn;
   dom.app.hidden = !signedIn;
   if (!signedIn) return;
@@ -428,13 +384,6 @@ async function start() {
       `Data is not on a persistent disk (${storage.directory}). Anything you add here will be ` +
       `lost when the server restarts. Check that the volume is still mounted before adding players.`;
   }
-
-  dom['seg-state'].textContent = segmentation.available
-    ? 'Auto silhouettes on'
-    : segmentation.modulesInstalled
-      ? 'No model — run: npm run fetch-model'
-      : 'Auto silhouettes off — onnxruntime-node not installed';
-  dom['seg-state'].className = `claude-state ${segmentation.available ? 'ok' : 'warn'}`;
   await refresh();
 }
 

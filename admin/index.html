@@ -27,7 +27,6 @@
       <h1>Silhoueds admin</h1>
       <div class="topbar-actions">
         <span class="claude-state" id="claude-state"></span>
-        <span class="claude-state" id="seg-state"></span>
         <a href="/" target="_blank" rel="noopener">View game</a>
         <button class="ghost" id="logout">Sign out</button>
       </div>
@@ -54,10 +53,6 @@
         Upload the silhouette and the full photo. The silhouette is the puzzle; the full photo is
         revealed once the round is over. Claude drafts the hints from the name alone — the images
         are never sent anywhere. Nothing goes live until you publish it.
-      </p>
-      <p class="hint-text">
-        Leave the silhouette empty and one will be cut out of the photo automatically, which is a
-        rough fallback rather than a substitute for your own artwork.
       </p>
       <p class="error" id="add-error" role="alert"></p>
     </section>
@@ -89,8 +84,7 @@
     <form method="dialog" class="tracer-close"><button aria-label="Close">✕</button></form>
     <h2 id="tracer-title">Trace silhouette</h2>
     <p class="hint-text">
-      Auto-tracing usually gets it. If the cut-out grabbed too much or too little, nudge the
-      cut-off and run it again. To fix it by hand, click around the outline to drop points —
+      For a player you have no silhouette image for. Click around the outline to drop points —
       drag one to move it, click it to remove it, and the shape closes itself.
     </p>
     <div class="tracer-body">
@@ -102,12 +96,6 @@
         <h3>Preview</h3>
         <div class="preview-box" id="tracer-preview"></div>
         <div class="tracer-controls">
-          <label>
-            <input type="range" id="tracer-threshold" min="20" max="80" value="50">
-            Cut-off
-          </label>
-          <button class="primary" id="tracer-auto" type="button">Auto-trace at this cut-off</button>
-          <hr class="tracer-rule">
           <label><input type="checkbox" id="tracer-smooth" checked> Smooth curve</label>
           <label><input type="range" id="tracer-dim" min="0" max="100" value="55"> Photo fade</label>
           <button class="ghost" id="tracer-undo" type="button">Undo point</button>

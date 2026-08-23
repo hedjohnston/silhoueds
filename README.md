@@ -50,50 +50,19 @@ Claude drafts the hints and the accepted spellings from the name. Everything lan
 **Publish** is refused until a player has artwork and at least one hint. Use **Replace images** to
 swap either image later.
 
+For a player you have no silhouette image for, **Trace by hand** in the admin lets you click an
+outline around the photo instead.
+
 The full photo is served only to a visitor whose round is already over — before that the endpoint
 returns 403, so it cannot be fetched early to look up the answer. Neither image is reachable by
 guessing a path; both go through the API.
-
-### If you don't upload a silhouette
-
-One is cut out of the full photo automatically (U^2-Net locally, ~0.5s). Treat it as a rough
-fallback rather than a substitute for your own artwork — it takes whatever the model thinks the
-subject is. **Auto-cut from photo** re-runs it, and **Touch up by hand** opens the point editor
-with a cut-off slider.
 
 ### What is sent to Claude
 
 Only the name you typed. The reference photo is never sent — you already know who the player is,
 so there is nothing to identify, and keeping photos out of the request avoids using the model for
-face recognition. The automatic fallback is local too, so images never leave your machine at all.
-Claude is asked to report `known: false` rather than invent a career for a name it doesn't
-recognise.
-
-### If the automatic fallback is unavailable
-
-`onnxruntime-node` and `sharp` are **optional** dependencies, and the model is fetched on install.
-If either step fails, the app still runs — the admin says so at the top and hand-tracing still
-works. To retry the model download:
-
-```sh
-npm run fetch-model
-```
-
-The model is U^2-Net (u2netp, 4.4 MB, Apache-2.0), verified by checksum on download and stored in
-`models/`, which is git-ignored.
-
-## When the puzzle changes
-
-The puzzle rolls over at **each player's own local midnight**. The browser reports its timezone
-and the server files the round under that local date, so someone in Sydney moves to the next
-puzzle while someone in London is still on the previous one.
-
-Two consequences worth knowing: shared scores from different countries may be for different
-puzzles, and a player who changes their device timezone can pull the next puzzle early. The
-answer is still never sent before a round ends, so the most that buys is playing ahead.
-
-`SILHOUEDS_TIMEZONE` (default `UTC`) is the fallback when a browser reports no usable zone, and
-is what the admin uses for its own "today" and the play stats.
+face recognition. Your images never leave your machine at all. Claude is asked to report
+`known: false` rather than invent a career for a name it doesn't recognise.
 
 ## Guess matching
 
@@ -126,9 +95,6 @@ the viewer's system theme.
 | `server/seed.mjs` | Loads the three starter players |
 | `public/` | The game the players see |
 | `admin/` | Admin UI, including the silhouette editor |
-| `server/segment.mjs` | Photo to silhouette: local segmentation |
-| `server/vectorise.mjs` | Mask to SVG: component pick, boundary trace, simplify |
-| `tools/fetch-model.mjs` | Downloads the segmentation model |
 
 ## API
 
@@ -215,16 +181,6 @@ container. Whatever you use:
 
 Without Docker, any host with Node 22.5+ works: clone, `npm ci`, set the variables, `npm start`,
 and put a reverse proxy with TLS in front.
-
-### Image size
-
-By default the image skips `onnxruntime-node` and `sharp`, which only power the
-cut-a-silhouette-from-a-photo fallback — a few hundred MB for something you don't need if you
-upload your own silhouettes. The admin will show "Auto silhouettes off". To include them:
-
-```sh
-fly deploy --build-arg INCLUDE_AUTOCUT=true
-```
 
 ### Before you publish
 

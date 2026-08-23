@@ -8,5 +8,4 @@ assets/source/*
 !assets/source/.gitkeep
 *.trace.html
 .env
-models/
 captured-request.json

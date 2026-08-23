@@ -8,7 +8,6 @@ import crypto from 'node:crypto';
 import { players, schedule, plays } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
 import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
-import { photoToSilhouette, segmentationStatus } from './segment.mjs';
 import { storageStatus } from './storage.mjs';
 import { todayKey, hasArtwork } from './game.mjs';
 
@@ -75,11 +74,10 @@ adminRouter.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-adminRouter.get('/session', async (req, res) => {
+adminRouter.get('/session', (req, res) => {
   res.json({
     signedIn: isAdmin(req),
     claudeConfigured: hasApiKey(),
-    segmentation: await segmentationStatus(),
     storage: storageStatus(),
     hintLabels: HINT_LABELS,
   });
@@ -94,18 +92,10 @@ adminRouter.get('/players', (req, res) => {
   });
 });
 
-/** Cut the player out of their stored photo and save the traced outline. */
-async function buildSilhouette(player, options = {}) {
-  if (!player.photo) throw new Error('That player has no reference photo to trace.');
-  const { svg } = await photoToSilhouette(path.resolve(UPLOAD_DIR, player.photo), options);
-  return players.update(player.id, { silhouette: svg });
-}
-
 /**
- * Create a player from a typed name plus a reference photo, and — unless asked not to — do
- * the rest of the work straight away: trace the silhouette from the photo, draft the hints
- * with Claude. Both steps are best-effort; whatever fails is reported and can be retried
- * from the player's card.
+ * Create a player from a typed name plus their two images, and — unless asked not to — draft
+ * the hints with Claude straight away. That step is best-effort; a failure is reported and can
+ * be retried from the player's card.
  */
 const uploads = upload.fields([
   { name: 'silhouette', maxCount: 1 },
@@ -129,15 +119,6 @@ adminRouter.post('/players', uploads, async (req, res) => {
 
   const steps = {};
   if (req.body?.auto !== 'false') {
-    // Only fall back to cutting the player out of their photo when no silhouette was supplied.
-    if (!silhouetteFile && player.photo) {
-      try {
-        player = await buildSilhouette(player);
-        steps.silhouette = 'done';
-      } catch (error) {
-        steps.silhouette = error.message;
-      }
-    }
     if (hasApiKey()) {
       try {
         const result = await generateHints(player.name);
@@ -186,22 +167,6 @@ adminRouter.post('/players/:id/images', uploads, (req, res) => {
 
   const updated = players.update(player.id, fields);
   res.json({ player: { ...updated, missing: readiness(updated) } });
-});
-
-// Re-trace an existing player's photo, optionally with a different cut-off.
-adminRouter.post('/players/:id/silhouette', async (req, res) => {
-  const player = players.get(Number(req.params.id));
-  if (!player) return res.status(404).json({ error: 'No such player' });
-
-  try {
-    const updated = await buildSilhouette(player, {
-      threshold: Number(req.body?.threshold) || undefined,
-      smooth: req.body?.smooth === undefined ? undefined : Number(req.body.smooth),
-    });
-    res.json({ player: { ...updated, missing: readiness(updated) } });
-  } catch (error) {
-    res.status(422).json({ error: error.message });
-  }
 });
 
 // Ask Claude for hints and aliases. Saves them as a draft for review — never publishes.
