@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- maximum-scale/user-scalable stop pinch-zoom on Android and in the installed app; iOS
+       Safari ignores them by design, so the real fixes are touch-action and the 16px input. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <title>Silhoueds</title>
   <meta name="description" content="One footballer a day, in silhouette. Six guesses, and a new hint every time you miss.">
@@ -25,7 +27,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sansita:wght@700;800&family=Mulish:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='4' r='3'/><path d='M4 16 Q8 6 12 16z'/></svg>">
+  <link rel="icon" href="/favicon-64.png" sizes="64x64">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- Launch without Safari chrome when opened from the iOS Home Screen. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Silhoueds">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#fcfcfc">
 </head>
 <body>
   <main class="card">

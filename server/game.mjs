@@ -3,6 +3,7 @@
 
 import { players, schedule, plays } from './db.mjs';
 import { matchesPlayer } from './matching.mjs';
+import { inLadderOrder } from './hints.mjs';
 
 export const MAX_GUESSES = 6;
 
@@ -140,10 +141,16 @@ function nextDay(date) {
   return new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 }
 
-/** Hints earned so far — one per wrong guess or skip. */
+/**
+ * Hints earned so far — one per wrong guess or skip.
+ *
+ * Sorted into ladder order rather than trusting the stored order: players saved before the ladder
+ * changed still hold the old sequence, and the admin allows hand editing.
+ */
 function revealedHints(player, guesses) {
   const misses = guesses.filter((g) => !g.correct).length;
-  return player.hints.slice(0, Math.min(misses, player.hints.length));
+  const ordered = inLadderOrder(player.hints);
+  return ordered.slice(0, Math.min(misses, ordered.length));
 }
 
 /** How blurred the photo should be, given how far through the hints the player is. */

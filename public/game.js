@@ -290,14 +290,19 @@ async function send(path, body) {
 }
 
 /** Wordle-style grid: one square per guess, green only on the winning one. */
-function shareText() {
+function shareGrid() {
   const squares = state.guesses
     .map((guess) => (guess.correct ? '🟩' : guess.skipped ? '⬜' : '🟥'))
     .join('');
   const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
   const marker = state.mode === 'easy' ? ' easy' : '';
+  return `Silhoueds ${state.date} ${score}${marker}\n${squares}`;
+}
+
+/** Grid plus link, for when we're pasting text rather than handing over a URL separately. */
+function shareText() {
   // The link is the point: without it nobody who sees this can find the game.
-  return `Silhoueds ${state.date} ${score}${marker}\n${squares}\n${location.origin}`;
+  return `${shareGrid()}\n${location.origin}`;
 }
 
 /** Four figures and a bar per guess count, so a win reads in context. */
@@ -422,14 +427,39 @@ function renderCountdown() {
     : `Next silhouette in ${hours}h ${minutes}m.`;
 }
 
-async function copyShare() {
+async function copyToClipboard() {
   const text = shareText();
   try {
     await navigator.clipboard.writeText(text);
     dom.shareStatus.textContent = 'Copied to clipboard';
   } catch {
+    // No clipboard access — show it so it can at least be copied by hand.
     dom.shareStatus.textContent = text;
   }
+}
+
+/**
+ * Open the system share sheet where there is one, and fall back to the clipboard.
+ *
+ * The link goes in `url` rather than inside `text`: passing both would put the address in the
+ * message twice on most targets.
+ */
+async function share() {
+  const payload = { title: 'Silhoueds', text: shareGrid(), url: location.origin };
+
+  if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
+    try {
+      await navigator.share(payload);
+      dom.shareStatus.textContent = '';
+      return;
+    } catch (error) {
+      // Dismissing the sheet is a choice, not a failure — say nothing and stop.
+      if (error?.name === 'AbortError') return;
+      // Anything else (no permission, unsupported target) falls through to the clipboard.
+    }
+  }
+
+  await copyToClipboard();
 }
 
 async function openRound(date) {
@@ -473,7 +503,7 @@ async function init() {
     if (guess) send('/api/guess', { guess });
   });
   dom.skip.addEventListener('click', () => send('/api/skip'));
-  dom.share.addEventListener('click', copyShare);
+  dom.share.addEventListener('click', share);
   dom.modeHard.addEventListener('click', () => chooseMode('hard'));
   dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
   dom.statsButton.addEventListener('click', showStats);

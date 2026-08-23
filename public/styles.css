@@ -34,6 +34,8 @@
 body {
   margin: 0;
   min-height: 100vh;
+  /* Stops the rubber-band scroll revealing white behind the page in the installed app. */
+  overscroll-behavior-y: none;
   padding: clamp(10px, 3vw, 32px) clamp(10px, 3vw, 16px);
   display: flex;
   justify-content: center;
@@ -286,7 +288,9 @@ body {
   width: 100%;
   padding: 13px 18px;
   font: inherit;
-  font-size: 16px; /* keeps iOS from zooming on focus */
+  touch-action: manipulation;
+  /* 16px exactly: anything smaller and iOS zooms the page when this is tapped. Do not shrink. */
+  font-size: 16px;
   font-weight: 600;
   color: var(--ink);
   background: #fff;
@@ -300,6 +304,8 @@ body {
 button {
   font: inherit;
   cursor: pointer;
+  /* Removes double-tap-to-zoom, and the tap delay that comes with it. */
+  touch-action: manipulation;
   font-family: var(--display);
   font-weight: 700;
   color: var(--ink);

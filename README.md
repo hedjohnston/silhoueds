@@ -87,13 +87,25 @@ Hard mode is unaffected: its photo is never sent early.
 
 ## What players get
 
-- **Hints** arrive one per miss, in a fixed ladder, shown in a panel that counts them off.
+- **Hints** arrive one per miss, in a fixed ladder — position, era, league, nationality, then
+  the club they're best known for — shown in a panel that counts them off. The ladder lives in
+  `server/hints.mjs`, and the reveal sorts by it rather than trusting stored order, so changing
+  it takes effect for players already in the database.
 - **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
   Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
 - **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.
   A future date is refused, and a past date that never ran is refused rather than assigned on
   demand, which would quietly burn through the pool.
-- **Sharing** — the result grid carries the site link, and the page has `og:`/`twitter:` tags so
+- **Sharing** — the button opens the phone's own share sheet where there is one (iOS, Android,
+  most desktop browsers), falling back to the clipboard. The link is passed separately from the
+  grid so it doesn't appear twice in the message.
+- **Installable** — a web manifest and an `apple-touch-icon`, so the game can be added to the
+  Home Screen and opens without browser chrome. Icons are committed; `tools/make-icons.mjs`
+  regenerates them and needs Playwright via `npx` (deliberately not a project dependency).
+- **No accidental zoom** — the game blocks pinch-zoom where the platform allows it, and kills
+  double-tap zoom and the iOS zoom-on-input everywhere. iOS Safari ignores the viewport flag by
+  design, so the targeted fixes carry it there. The admin keeps normal zoom, being a desk tool.
+- **Link previews** — the result grid carries the site link, and the page has `og:`/`twitter:` tags so
   a pasted link previews with `public/preview.png`. That image is a figure drawn for the purpose,
   never a player in rotation, so sharing can't spoil a puzzle. The tags need an absolute URL and
   scrapers don't run JavaScript, so `server/index.mjs` serves `/` through a substitution rather
