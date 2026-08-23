@@ -155,6 +155,17 @@ export const schedule = {
       )
       .all(limit);
   },
+  /** Past puzzles that actually ran, newest first — the archive. */
+  past(today, limit = 60) {
+    return db
+      .prepare(
+        `SELECT s.date FROM schedule s
+         JOIN players p ON p.id = s.player_id
+         WHERE s.date <= ? ORDER BY s.date DESC LIMIT ?`,
+      )
+      .all(today, limit)
+      .map((row) => row.date);
+  },
   /** Dates already spoken for, so auto-assignment doesn't reuse a player still queued up. */
   scheduledPlayerIds() {
     return db.prepare("SELECT player_id FROM schedule WHERE date >= date('now', '-365 day')")
@@ -175,6 +186,17 @@ export const plays = {
          guesses = excluded.guesses, finished = excluded.finished,
          won = excluded.won, updated_at = datetime('now')`,
     ).run(sessionId, date, JSON.stringify(guesses), finished ? 1 : 0, won ? 1 : 0);
+  },
+  /** Every finished round for one visitor, newest first — the raw material for stats. */
+  history(sessionId) {
+    return db
+      .prepare(
+        `SELECT date, won, guesses FROM plays
+         WHERE session_id = ? AND finished = 1
+         ORDER BY date DESC`,
+      )
+      .all(sessionId)
+      .map((row) => ({ date: row.date, won: !!row.won, guesses: JSON.parse(row.guesses) }));
   },
   stats(date) {
     return db

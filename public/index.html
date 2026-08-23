@@ -6,6 +6,21 @@
   <meta name="color-scheme" content="light">
   <title>Silhoueds</title>
   <meta name="description" content="One footballer a day, in silhouette. Six guesses, and a new hint every time you miss.">
+
+  <!-- Link previews. %PUBLIC_URL% is substituted by the server; scrapers don't run JavaScript,
+       so these have to be absolute in the HTML as served. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Silhoueds">
+  <meta property="og:title" content="Silhoueds — name the footballer from their shadow">
+  <meta property="og:description" content="One footballer a day, in silhouette. Six guesses, and a new hint every time you miss.">
+  <meta property="og:url" content="%PUBLIC_URL%/">
+  <meta property="og:image" content="%PUBLIC_URL%/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Silhoueds — name the footballer from their shadow">
+  <meta name="twitter:description" content="One footballer a day, in silhouette. Six guesses, and a new hint every time you miss.">
+  <meta name="twitter:image" content="%PUBLIC_URL%/preview.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sansita:wght@700;800&family=Mulish:wght@400;500;600;700;800&display=swap">
@@ -24,7 +39,7 @@
       <div class="silhouette" id="silhouette" role="img" aria-label="Today's silhouette"></div>
     </div>
 
-    <ul class="hints" id="hints" aria-live="polite" aria-label="Hints"></ul>
+    <div class="hint-panel" id="hints" aria-live="polite" aria-label="Hints"></div>
 
     <ol class="history" id="guess-history" aria-label="Your guesses"></ol>
 
@@ -54,8 +69,20 @@
       <p class="result-name" id="result-name"></p>
       <button class="primary" id="share-button" type="button">Share result</button>
       <p class="share-status" id="share-status" aria-live="polite"></p>
-      <p class="comeback">A new silhouette lands at midnight UTC.</p>
+      <div class="stats" id="stats"></div>
+      <p class="comeback" id="comeback"></p>
     </section>
+
+    <nav class="footer-nav">
+      <button class="link" id="stats-button" type="button">Your stats</button>
+      <button class="link" id="archive-button" type="button">Past puzzles</button>
+    </nav>
+
+    <dialog class="sheet" id="sheet">
+      <form method="dialog" class="sheet-close"><button aria-label="Close">✕</button></form>
+      <h2 class="sheet-title" id="sheet-title"></h2>
+      <div id="sheet-body"></div>
+    </dialog>
   </main>
 
   <script type="module" src="game.js"></script>

@@ -55,8 +55,83 @@ function autoAssign(date) {
   return chosen;
 }
 
+/**
+ * Which day a request is allowed to play.
+ *
+ * Today always resolves. An earlier day resolves only if it actually ran — a past date is never
+ * auto-assigned, or requesting arbitrary dates would quietly burn through the pool of players.
+ * A future date never resolves, so the archive can't be used to read ahead.
+ */
+export function resolveRoundDate(requested, today) {
+  if (!requested) return today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) return null;
+  if (requested > today) return null;
+  if (requested === today) return today;
+  return schedule.get(requested) ? requested : null;
+}
+
 export function playerForDate(date) {
   return schedule.get(date) ?? autoAssign(date);
+}
+
+/** The calendar day before `date` ("YYYY-MM-DD"), for walking a streak backwards. */
+function previousDay(date) {
+  const stamp = Date.parse(`${date}T00:00:00Z`) - 86400000;
+  return new Date(stamp).toISOString().slice(0, 10);
+}
+
+/**
+ * A visitor's record, from their own finished rounds.
+ *
+ * The streak walks back a day at a time from today, so it stays consistent with the per-player
+ * rollover: a day you didn't play breaks it, and today not being played yet does not.
+ */
+export function statsFor(sessionId, today) {
+  const history = plays.history(sessionId);
+  const played = history.length;
+  const wins = history.filter((round) => round.won);
+
+  const distribution = {};
+  for (let n = 1; n <= MAX_GUESSES; n++) distribution[n] = 0;
+  for (const round of wins) {
+    const used = round.guesses.length;
+    if (distribution[used] !== undefined) distribution[used]++;
+  }
+
+  const wonDates = new Set(wins.map((round) => round.date));
+  const playedDates = new Set(history.map((round) => round.date));
+
+  // Today only breaks the streak once it has actually been played and lost.
+  let cursor = playedDates.has(today) ? today : previousDay(today);
+  let currentStreak = 0;
+  while (wonDates.has(cursor)) {
+    currentStreak++;
+    cursor = previousDay(cursor);
+  }
+
+  let bestStreak = 0;
+  let run = 0;
+  const ascending = [...wonDates].sort();
+  let expected = null;
+  for (const date of ascending) {
+    run = expected === date ? run + 1 : 1;
+    if (run > bestStreak) bestStreak = run;
+    expected = nextDay(date);
+  }
+
+  return {
+    played,
+    won: wins.length,
+    winRate: played === 0 ? 0 : Math.round((wins.length / played) * 100),
+    currentStreak,
+    bestStreak,
+    distribution,
+    maxGuesses: MAX_GUESSES,
+  };
+}
+
+function nextDay(date) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 }
 
 /** Hints earned so far — one per wrong guess or skip. */
@@ -77,6 +152,8 @@ export function publicState(player, play) {
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
     hints: revealedHints(player, guesses),
+    // How many exist in total, so the panel can show how much help is left.
+    hintsTotal: player.hints.length,
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),
     guessesLeft: MAX_GUESSES - guesses.length,
     maxGuesses: MAX_GUESSES,
@@ -98,8 +175,9 @@ export function loadRound(sessionId, date = todayKey()) {
  * Apply one guess (or a skip) and persist it. Returns the new public state plus `spelling`,
  * which flags a match that only got through on fuzzy tolerance.
  */
-export function submitGuess(sessionId, rawGuess, { skipped = false, timeZone } = {}) {
-  const date = todayKey(new Date(), timeZone);
+export function submitGuess(sessionId, rawGuess, { skipped = false, timeZone, date: requested } = {}) {
+  const date = resolveRoundDate(requested, todayKey(new Date(), timeZone));
+  if (!date) return null;
   const round = loadRound(sessionId, date);
   if (!round) return null;
 

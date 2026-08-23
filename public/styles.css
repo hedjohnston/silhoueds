@@ -106,52 +106,79 @@ body {
 
 /* --- hints --- */
 
-.history { list-style: none; margin: 0; padding: 0; }
+.history, .hint-rows { list-style: none; margin: 0; padding: 0; }
 
-/* Revealed hints are information, not feedback: a quiet dotted list rather than pills, so the
-   coloured guess pills stay the loudest thing on the page. */
-.hints {
+/* Revealed hints get the same panel treatment as the stage and the result box, so they read as
+   part of the same object rather than loose text. */
+.hint-card {
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.hint-card-head {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin: 0;
-  padding: 0 4px 0 22px;
-  list-style: disc;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 16px;
+  background: var(--yellow);
+  border-bottom: 3px solid var(--line);
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.hints::marker, .hint::marker { font-size: 0.9em; }
+.hint-count { font-family: var(--text); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; }
 
-/* list-item, not flex: a flex container draws no list marker, so the dot would vanish. */
 .hint {
-  display: list-item;
-  font-size: 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 16px;
 }
+
+.hint + .hint { border-top: 2px solid rgb(0 0 0 / 0.1); }
+
+.hint-latest { background: #fffdf4; }
+
+/* The number is the rung of the hint ladder, not decoration — hints always arrive in this order. */
+.hint-index {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  background: var(--blue);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 
 .hint-label {
-  display: inline-block;
-  min-width: 106px;   /* wide enough for the longest label, so the values line up */
-  padding-right: 8px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
-  vertical-align: baseline;
 }
 
-.hint-value { font-weight: 600; }
+/* Long values (a list of leagues) wrap rather than pushing the panel wide. */
+.hint-value { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 
-/* Below ~360px a fixed label column squeezes the value, so stack them instead. */
-@media (max-width: 360px) {
-  .hint-label { min-width: 0; display: block; padding-right: 0; }
-}
-
-/* The placeholder is not a hint, so it keeps its own dashed treatment and no marker. */
 .hint-empty {
-  list-style: none;
-  margin-left: -18px;
-  justify-content: center;
-  padding: 9px 14px;
+  margin: 0;
+  padding: 11px 14px;
+  text-align: center;
   border: 3px dashed var(--grey);
   border-radius: 999px;
   color: var(--muted);
@@ -288,3 +315,124 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
   * { transition: none !important; }
   button:hover:not(:disabled) { transform: none; }
 }
+
+/* --- stats --- */
+
+.stats { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+.stat-figures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.stat-figures dt {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-figures dd {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-caption {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-chart { display: flex; flex-direction: column; gap: 5px; }
+
+.stat-row { display: flex; align-items: center; gap: 8px; }
+
+.stat-key {
+  flex: 0 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.stat-bar {
+  padding: 2px 8px;
+  background: var(--grey-light);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-row-current .stat-bar { background: var(--green); }
+
+/* --- footer nav and sheet --- */
+
+.footer-nav { display: flex; justify-content: center; gap: 20px; }
+
+.link {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-family: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover { color: var(--ink); }
+.link:hover:not(:disabled) { transform: none; }
+
+.sheet {
+  width: min(420px, 92vw);
+  padding: 18px;
+  background: var(--ground);
+  color: var(--ink);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+
+.sheet::backdrop { background: rgb(0 0 0 / 0.45); }
+.sheet-close { display: flex; justify-content: flex-end; }
+.sheet-close button { border: none; background: none; box-shadow: none; font-size: 18px; color: var(--muted); }
+.sheet-title { margin: 0 0 12px; font-family: var(--display); font-size: 22px; }
+.sheet-empty { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+
+.archive { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow-y: auto; }
+
+.archive-entry {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.archive-entry:hover:not(:disabled) { transform: none; background: var(--grey-light); }
+.archive-status { font-size: 12px; font-weight: 800; color: var(--muted); }
+.archive-solved { background: var(--green); }
+.archive-failed { background: var(--red); }
+.archive-started { background: var(--yellow); }

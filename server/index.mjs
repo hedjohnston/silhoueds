@@ -2,6 +2,7 @@
 
 import './env.mjs';
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gameRouter } from './routes-game.mjs';
@@ -40,10 +41,26 @@ app.get('/healthz', (req, res) => res.json({ ok: true }));
 app.use('/api', gameRouter);
 app.use('/api/admin', adminRouter);
 
+// The link-preview tags need an absolute URL, and scrapers don't run JavaScript, so the page is
+// served through a substitution rather than as a plain static file. Configure
+// SILHOUEDS_PUBLIC_URL behind a proxy that rewrites the host; otherwise the request's own
+// protocol and host are correct and nothing needs setting.
+const INDEX = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+
+function sendIndex(req, res) {
+  const base = (process.env.SILHOUEDS_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`)
+    .replace(/\/+$/, '');
+  res.type('html').send(INDEX.replaceAll('%PUBLIC_URL%', base));
+}
+
+// Both paths, so a link shared as /index.html previews the same as one shared as /.
+app.get('/', sendIndex);
+app.get('/index.html', sendIndex);
+
 // Serve only the two web roots. The repo root is never served — it holds the database,
 // the uploaded photos and node_modules.
 app.use('/admin', express.static(path.join(root, 'admin')));
-app.use(express.static(path.join(root, 'public'), { index: 'index.html' }));
+app.use(express.static(path.join(root, 'public'), { index: false }));
 
 // Multer and JSON parse failures arrive here; without this they'd surface as HTML error pages.
 app.use((error, req, res, next) => {

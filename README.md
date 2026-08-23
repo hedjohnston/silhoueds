@@ -32,6 +32,7 @@ Two environment variables are required and the server refuses to boot without th
 | `SILHOUEDS_ADMIN_PASSWORD` | The password for `/admin` |
 | `ANTHROPIC_API_KEY` | Optional — only for generating hints with Claude |
 | `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `UTC` (see below) |
+| `SILHOUEDS_PUBLIC_URL` | Optional — only behind a proxy that rewrites the host |
 
 Storage is a SQLite file at `data/silhoueds.db`, via `node:sqlite` — built into Node 22.5+, so
 there is no native module to compile. Uploaded photos live in `data/uploads/`. Neither directory
@@ -63,6 +64,20 @@ Only the name you typed. The reference photo is never sent — you already know 
 so there is nothing to identify, and keeping photos out of the request avoids using the model for
 face recognition. Your images never leave your machine at all. Claude is asked to report
 `known: false` rather than invent a career for a name it doesn't recognise.
+
+## What players get
+
+- **Hints** arrive one per miss, in a fixed ladder, shown in a panel that counts them off.
+- **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
+  Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
+- **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.
+  A future date is refused, and a past date that never ran is refused rather than assigned on
+  demand, which would quietly burn through the pool.
+- **Sharing** — the result grid carries the site link, and the page has `og:`/`twitter:` tags so
+  a pasted link previews with `public/preview.png`. That image is a figure drawn for the purpose,
+  never a player in rotation, so sharing can't spoil a puzzle. The tags need an absolute URL and
+  scrapers don't run JavaScript, so `server/index.mjs` serves `/` through a substitution rather
+  than as a static file.
 
 ## Guess matching
 
@@ -102,9 +117,11 @@ Public:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far |
+| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day |
 | `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
 | `POST /api/skip` | Burns a guess to reveal a hint |
+| `GET /api/stats` | This visitor's played, win rate, streaks and guess distribution |
+| `GET /api/archive` | Past puzzles and how this visitor did on each |
 
 Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
 /api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,
