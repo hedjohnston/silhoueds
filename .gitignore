@@ -9,3 +9,4 @@ assets/source/*
 *.trace.html
 .env
 models/
+captured-request.json
