@@ -1,0 +1,195 @@
+// Admin API. Everything past /login sits behind requireAdmin.
+
+import express from 'express';
+import multer from 'multer';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { players, schedule, plays } from './db.mjs';
+import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
+import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
+import { todayKey } from './game.mjs';
+
+const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const ALLOWED_IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) =>
+      cb(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    ALLOWED_IMAGES.has(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Photos must be JPEG, PNG, WebP or AVIF.')),
+});
+
+const slugify = (name) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'player';
+
+/** Slugs are unique in the schema, so suffix until one is free. */
+function uniqueSlug(name) {
+  const base = slugify(name);
+  let slug = base;
+  let n = 2;
+  while (players.bySlug(slug)) slug = `${base}-${n++}`;
+  return slug;
+}
+
+/** A player is only playable with artwork and at least one hint. */
+function readiness(player) {
+  const missing = [];
+  if (!player.silhouette) missing.push('silhouette');
+  if (!player.hints?.length) missing.push('hints');
+  return missing;
+}
+
+export const adminRouter = express.Router();
+
+adminRouter.post('/login', (req, res) => {
+  if (!checkPassword(req.body?.password ?? '')) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  issueAdminCookie(res);
+  res.json({ ok: true });
+});
+
+adminRouter.post('/logout', (req, res) => {
+  clearAdminCookie(res);
+  res.json({ ok: true });
+});
+
+adminRouter.get('/session', (req, res) => {
+  res.json({ signedIn: isAdmin(req), claudeConfigured: hasApiKey(), hintLabels: HINT_LABELS });
+});
+
+adminRouter.use(requireAdmin);
+
+adminRouter.get('/players', (req, res) => {
+  res.json({
+    players: players.all().map((p) => ({ ...p, missing: readiness(p) })),
+    hintLabels: HINT_LABELS,
+  });
+});
+
+// Create a player from a typed name plus an optional reference photo.
+adminRouter.post('/players', upload.single('photo'), (req, res) => {
+  const name = String(req.body?.name ?? '').trim();
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+
+  const player = players.create({
+    slug: uniqueSlug(name),
+    name,
+    photo: req.file?.filename ?? null,
+  });
+  res.status(201).json({ player: { ...player, missing: readiness(player) } });
+});
+
+// Ask Claude for hints and aliases. Saves them as a draft for review — never publishes.
+adminRouter.post('/players/:id/hints', async (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+  if (!hasApiKey()) {
+    return res.status(503).json({
+      error: 'ANTHROPIC_API_KEY is not set on the server, so hints cannot be generated.',
+    });
+  }
+
+  try {
+    const result = await generateHints(player.name);
+    if (!result.known) {
+      return res.status(422).json({
+        error: `Claude does not recognise "${player.name}" as a footballer. Check the spelling.`,
+        note: result.note,
+      });
+    }
+    const updated = players.update(player.id, {
+      hints: result.hints,
+      // Keep any aliases already entered by hand.
+      aliases: [...new Set([...player.aliases, ...result.aliases])],
+      hint_source: 'claude',
+    });
+    res.json({
+      player: { ...updated, missing: readiness(updated) },
+      note: result.note,
+      canonicalName: result.canonicalName,
+      usage: result.usage,
+    });
+  } catch (error) {
+    res.status(502).json({ error: `Claude request failed: ${error.message}` });
+  }
+});
+
+adminRouter.patch('/players/:id', (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+
+  const fields = {};
+  if (typeof req.body.name === 'string' && req.body.name.trim()) fields.name = req.body.name.trim();
+  if (Array.isArray(req.body.aliases)) fields.aliases = req.body.aliases.map(String);
+  if (Array.isArray(req.body.hints)) {
+    fields.hints = req.body.hints
+      .filter((h) => h && h.label && h.value)
+      .map((h) => ({ label: String(h.label), value: String(h.value) }));
+    fields.hint_source = 'manual';
+  }
+  if (typeof req.body.silhouette === 'string') fields.silhouette = req.body.silhouette;
+
+  if (req.body.status === 'ready' || req.body.status === 'draft') {
+    const candidate = { ...player, ...fields };
+    const missing = readiness(candidate);
+    if (req.body.status === 'ready' && missing.length > 0) {
+      return res.status(400).json({ error: `Still missing: ${missing.join(' and ')}.` });
+    }
+    fields.status = req.body.status;
+  }
+
+  const updated = players.update(player.id, fields);
+  res.json({ player: { ...updated, missing: readiness(updated) } });
+});
+
+adminRouter.delete('/players/:id', (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+  if (player.photo) fs.rmSync(path.join(UPLOAD_DIR, player.photo), { force: true });
+  players.remove(player.id);
+  res.json({ ok: true });
+});
+
+// The uploaded reference photo, for tracing against in the admin.
+adminRouter.get('/players/:id/photo', (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player?.photo) return res.status(404).end();
+  res.sendFile(path.resolve(UPLOAD_DIR, player.photo));
+});
+
+adminRouter.get('/schedule', (req, res) => {
+  res.json({ today: todayKey(), upcoming: schedule.upcoming(), stats: plays.stats(todayKey()) });
+});
+
+adminRouter.put('/schedule/:date', (req, res) => {
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Bad date' });
+
+  const player = players.get(Number(req.body?.playerId));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+  if (readiness(player).length > 0) {
+    return res.status(400).json({ error: 'That player is still a draft.' });
+  }
+  schedule.set(date, player.id);
+  res.json({ ok: true, upcoming: schedule.upcoming() });
+});
+
+adminRouter.delete('/schedule/:date', (req, res) => {
+  schedule.clear(req.params.date);
+  res.json({ ok: true, upcoming: schedule.upcoming() });
+});

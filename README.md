@@ -2,97 +2,99 @@
 
 A daily guessing game: name the footballer from their silhouette.
 
-One player per day, six guesses. Every wrong guess (or a skip) reveals the next hint —
-position, nationality, era, league, then the club they're best known for. Finish and you get a
-shareable emoji grid.
+One player per day, six guesses. Every wrong guess (or a skip) reveals the next hint — position,
+nationality, era, league, then the club they're best known for. Finish and you get a shareable
+emoji grid.
+
+There is no dropdown of names. Players type a guess freely, and the server decides whether it's
+right — the browser never receives the answer until the round is over.
 
 ## Running it
 
-Static site, no build step and no runtime dependencies. Serve the folder over HTTP:
-
 ```sh
-python3 -m http.server 8000    # or: npx serve .
+npm install
+cp .env.example .env          # then fill in the two required values
+npm run seed                  # loads the three starter players
+npm start
 ```
 
-then open <http://localhost:8000>. It needs a server rather than `file://` because it loads
-ES modules and JSON with `fetch`. It deploys to GitHub Pages as-is.
+Game at <http://localhost:3000>, admin at <http://localhost:3000/admin>.
 
-### Or build a single file
+Two environment variables are required and the server refuses to boot without them:
 
-To get a copy that opens by double-clicking, with no server at all:
+| Variable | What it's for |
+| --- | --- |
+| `SILHOUEDS_SECRET` | Signs the admin and play-session cookies |
+| `SILHOUEDS_ADMIN_PASSWORD` | The password for `/admin` |
+| `ANTHROPIC_API_KEY` | Optional — only for generating hints with Claude |
 
-```sh
-node tools/build-standalone.mjs
-```
+Storage is a SQLite file at `data/silhoueds.db`, via `node:sqlite` — built into Node 22.5+, so
+there is no native module to compile. Uploaded photos live in `data/uploads/`. Neither directory
+is web-served; back up both to keep your players.
 
-That writes `dist/silhoueds.html` — the whole game in one file, with the data and silhouettes
-embedded and handed to the unchanged game code by a small `fetch` shim. Handy for sharing a
-playable copy. Rebuild it after changing anything under `src/`, `data/` or `public/`.
+## Adding a footballer
 
-## How a round works
+In the admin:
 
-- The puzzle is keyed to the UTC date. Days are grouped into cycles the size of the player pool
-  and each cycle is a fresh deterministic shuffle, so everyone gets the same player on the same
-  day and nobody repeats until the whole pool has been used (`src/puzzle.js`).
-- Guesses are matched accent- and punctuation-insensitively against the player's name and their
-  aliases, so `CR7`, `Ibrahimović` and `ibrahimovic` all land (`src/autocomplete.js`).
-- Progress is kept in `localStorage` under one key, scoped to the date — a reload restores the
-  board rather than handing out fresh guesses.
+1. **Add** — type the name and pick a reference photo. The player is created as a **draft**.
+2. **Generate hints with Claude** — drafts the five hints plus a set of accepted spellings.
+   Everything lands in editable fields; nothing is published automatically.
+3. **Trace silhouette** — click around the outline in the photo to drop points. Drag to move one,
+   click it to remove it, and the shape closes itself. The preview shows what players will see.
+4. **Publish** — only possible once the player has both artwork and at least one hint.
 
-## Adding a player
+Published players enter the rotation. Unscheduled days auto-assign a live player, preferring ones
+not already queued; use the **Schedule** panel to pin a specific player to a specific date.
 
-Silhouettes are original hand-drawn SVG, traced from a reference photo. That keeps the artwork
-ours rather than a cut-out of someone's copyrighted image.
+### What is sent to Claude
 
-1. Drop the reference photo in `assets/source/` (this folder is git-ignored — source photos
-   stay out of the repo).
-2. Build a tracing page:
+Only the name you typed. The reference photo is never sent — you already know who the player is,
+so there is nothing to identify, and keeping photos out of the request avoids using the model for
+face recognition. Generated hints are always a draft for you to review, and Claude is asked to
+report `known: false` rather than invent a career for a name it doesn't recognise.
 
-   ```sh
-   node tools/trace-helper.mjs assets/source/your-photo.jpg
-   ```
+## Guess matching
 
-   It writes a self-contained HTML file: the photo scaled into the silhouette's 400×600 viewBox,
-   under a labelled coordinate grid, with a live cursor readout and a contrast toggle. Open it and
-   read coordinates straight off the pose.
-3. Draw the outline as a single `<g fill="currentColor" stroke="currentColor">` on that same
-   400×600 viewBox and save it to `public/silhouettes/<slug>.svg`. Use `currentColor` throughout —
-   the game tints the silhouette on the reveal, which only works if the SVG inherits colour.
-   Thick round-capped strokes make good limbs; keep a visible gap between arms and torso or the
-   figure reads as a blob.
-4. Add the entry to `data/players.json`:
+With no dropdown, guesses have to be forgiving. `server/matching.mjs` folds accents, punctuation
+and casing, then allows a small edit distance that scales with name length — so `Ibrahimović`,
+`ibrahimovic` and `Ibrahimovic` all match, and a one-letter slip in a long name is accepted with a
+note that the spelling was off. Short names stay strict, so `Pepe` never matches `Pele`.
 
-   ```json
-   {
-     "id": "player-slug",
-     "name": "Player Name",
-     "aliases": ["nickname", "surname"],
-     "silhouette": "public/silhouettes/player-slug.svg",
-     "hints": [
-       { "label": "Position", "value": "Forward" },
-       { "label": "Nationality", "value": "Brazil" },
-       { "label": "Era", "value": "1994 – 2011" },
-       { "label": "League", "value": "La Liga & Serie A" },
-       { "label": "Best known at", "value": "Barcelona" }
-     ]
-   }
-   ```
-
-   Hints are shown in array order, so go from vaguest to most giveaway. Five hints matches the
-   six-guess ladder; fewer is fine, extras are ignored.
-5. Add the name to `data/roster.json` too. That list is what the guess autocomplete offers — it's
-   deliberately a superset of the playable players so the suggestions never narrow down the answer.
+Each player also carries an alias list (surname alone, nicknames, common misspellings), which
+Claude drafts and you can edit.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `index.html`, `styles.css` | Page shell and styling |
-| `src/game.js` | Round state machine — guesses, hint reveal, win/lose, share text |
-| `src/puzzle.js` | Date seeding and `localStorage` persistence |
-| `src/autocomplete.js` | Name normalisation, matching, typeahead |
-| `data/players.json` | Playable players and their hints |
-| `data/roster.json` | Names offered by the autocomplete |
-| `public/silhouettes/` | The artwork |
-| `tools/trace-helper.mjs` | Photo → tracing page |
-| `tools/build-standalone.mjs` | Bundles the game into one self-contained HTML file |
+| `server/index.mjs` | Express app — serves the game, the admin and the API |
+| `server/db.mjs` | SQLite schema and queries |
+| `server/game.mjs` | Round logic: scheduling, hint reveal, win/lose |
+| `server/matching.mjs` | Name normalisation and fuzzy matching |
+| `server/claude.mjs` | Hint generation via the Claude API |
+| `server/auth.mjs` | Signed admin and play-session cookies |
+| `server/routes-game.mjs`, `server/routes-admin.mjs` | HTTP endpoints |
+| `server/seed.mjs` | Loads the three starter players |
+| `public/` | The game the players see |
+| `admin/` | Admin UI, including the click-to-trace editor |
+| `tools/trace-helper.mjs` | Offline tracing page, for drawing silhouettes outside the admin |
+
+## API
+
+Public:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far |
+| `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
+| `POST /api/skip` | Burns a guess to reveal a hint |
+
+Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
+/api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,
+`GET /api/admin/players/:id/photo`, `GET|PUT|DELETE /api/admin/schedule[/:date]`.
+
+## Deploying
+
+One process, one SQLite file — it runs anywhere Node does. Set the environment variables, put it
+behind TLS, and set `NODE_ENV=production` so cookies are marked `secure`. Persist `data/` across
+deploys, or you lose your players and their artwork.

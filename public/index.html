@@ -26,6 +26,8 @@
 
     <p class="guesses-left" id="guesses-left" aria-live="polite"></p>
 
+    <p class="notice" id="notice" role="status"></p>
+
     <form class="guess-form" id="guess-form" autocomplete="off">
       <div class="input-wrap">
         <label class="visually-hidden" for="guess-input">Your guess</label>
@@ -33,12 +35,10 @@
           id="guess-input"
           type="text"
           placeholder="Type a player's name…"
-          role="combobox"
-          aria-expanded="false"
-          aria-controls="suggestions"
-          aria-autocomplete="list"
+          autocomplete="off"
+          autocapitalize="words"
+          spellcheck="false"
           enterkeyhint="go">
-        <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
       </div>
       <button class="primary" type="submit">Guess</button>
     </form>
@@ -54,6 +54,6 @@
     </section>
   </main>
 
-  <script type="module" src="src/game.js"></script>
+  <script type="module" src="game.js"></script>
 </body>
 </html>

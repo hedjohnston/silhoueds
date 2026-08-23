@@ -1,0 +1,169 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #131a23;
+  --edge: #24303d;
+  --ink: #eef3f8;
+  --muted: #8fa3b8;
+  --accent: #3ddc97;
+  --danger: #e2585a;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+h1, h2, h3 { margin: 0; }
+
+button { font: inherit; cursor: pointer; border-radius: 8px; }
+
+.primary { padding: 10px 16px; border: none; background: var(--accent); color: #06231a; font-weight: 600; }
+.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ghost { padding: 8px 12px; border: 1px solid var(--edge); background: none; color: var(--muted); }
+.ghost:hover { color: var(--ink); }
+.ghost.danger:hover { color: var(--danger); border-color: var(--danger); }
+
+input, select {
+  padding: 9px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: #0f151c;
+  color: var(--ink);
+  font: inherit;
+}
+
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.error { color: var(--danger); min-height: 20px; margin: 8px 0 0; font-size: 14px; }
+.hint-text { color: var(--muted); font-size: 14px; margin: 8px 0 0; max-width: 68ch; }
+
+/* --- login --- */
+
+.login { display: flex; justify-content: center; padding: 12vh 16px; }
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, 100%);
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+}
+
+/* --- shell --- */
+
+.app { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; display: flex; flex-direction: column; gap: 18px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
+.topbar a { color: var(--muted); }
+
+.claude-state { font-size: 13px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--edge); }
+.claude-state.ok { color: var(--accent); }
+.claude-state.warn { color: var(--danger); }
+
+.panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 18px; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; }
+.counts { color: var(--muted); font-size: 14px; margin: 0; }
+
+.add-form, .schedule-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 13px; color: var(--muted); }
+
+/* --- player cards --- */
+
+.players, .schedule, .hint-rows { list-style: none; margin: 0; padding: 0; }
+.players { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+
+.player { border: 1px solid var(--edge); border-radius: 12px; padding: 14px; }
+.player-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--edge); white-space: nowrap; }
+.chip-ready { color: var(--accent); border-color: var(--accent); }
+.chip-draft { color: var(--muted); }
+
+.player-body { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+
+.player-art {
+  flex: 0 0 110px;
+  height: 165px;
+  display: grid;
+  place-items: center;
+  background: #1b2632;
+  border-radius: 8px;
+  color: #05080b;
+}
+.player-art svg { height: 145px; width: auto; }
+.art-empty { color: var(--muted); font-size: 12px; }
+
+.player-details { flex: 1 1 340px; display: flex; flex-direction: column; gap: 10px; }
+
+.hint-rows { display: flex; flex-direction: column; gap: 6px; }
+.hint-rows li { display: flex; align-items: center; gap: 10px; }
+.hint-row-label { flex: 0 0 108px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.hint-rows input { flex: 1; }
+
+.alias-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.alias-label input { text-transform: none; letter-spacing: normal; font-size: 15px; }
+
+.source { margin: 0; font-size: 13px; color: var(--accent); min-height: 18px; }
+
+.player-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.schedule { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.schedule li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; background: #1b2632; border-radius: 8px; }
+.schedule .empty { color: var(--muted); font-size: 14px; justify-content: flex-start; }
+
+/* --- tracer --- */
+
+.tracer {
+  width: min(940px, 94vw);
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 18px;
+}
+.tracer::backdrop { background: rgb(0 0 0 / 0.7); }
+.tracer-close { display: flex; justify-content: flex-end; }
+.tracer-close button { border: none; background: none; color: var(--muted); font-size: 18px; }
+
+.tracer-body { display: flex; gap: 18px; margin-top: 12px; flex-wrap: wrap; }
+
+.tracer-stage {
+  position: relative;
+  flex: 1 1 380px;
+  aspect-ratio: 400 / 600;
+  max-height: 62vh;
+  background: #05080b;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tracer-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.55; }
+.tracer-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+
+.trace-shape { fill: rgb(61 220 151 / 0.42); stroke: var(--accent); stroke-width: 2; }
+.trace-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.trace-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; cursor: grab; }
+.trace-handle:hover { fill: var(--accent); }
+
+.tracer-preview { flex: 0 1 240px; display: flex; flex-direction: column; gap: 10px; }
+.preview-box { height: 260px; display: grid; place-items: center; background: #1b2632; border-radius: 10px; color: #05080b; }
+.preview-box svg { height: 240px; width: auto; }
+
+.tracer-controls { display: flex; flex-direction: column; gap: 8px; }
+.tracer-controls label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
