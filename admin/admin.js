@@ -16,7 +16,19 @@ let players = [];
 let hintLabels = [];
 let tracingPlayer = null;
 
+// Sent with every request so dates are resolved where the operator is, not where the server runs.
+const timeZone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+})();
+
 async function api(path, { method = 'GET', body, form } = {}) {
+  if (timeZone) {
+    path += `${path.includes('?') ? '&' : '?'}tz=${encodeURIComponent(timeZone)}`;
+  }
   const options = { method };
   if (form) options.body = form;
   else if (body !== undefined) {

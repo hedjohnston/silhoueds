@@ -152,14 +152,15 @@ export const schedule = {
   clear(date) {
     db.prepare('DELETE FROM schedule WHERE date = ?').run(date);
   },
-  upcoming(limit = 30) {
+  /** Today onwards. `today` is passed in: SQLite's date('now') is always UTC. */
+  upcoming(today, limit = 30) {
     return db
       .prepare(
         `SELECT s.date, p.id, p.name, p.slug FROM schedule s
          JOIN players p ON p.id = s.player_id
-         WHERE s.date >= date('now') ORDER BY s.date LIMIT ?`,
+         WHERE s.date >= ? ORDER BY s.date LIMIT ?`,
       )
-      .all(limit);
+      .all(today, limit);
   },
   /** Past puzzles that actually ran, newest first — the archive. */
   past(today, limit = 60) {
@@ -172,10 +173,15 @@ export const schedule = {
       .all(today, limit)
       .map((row) => row.date);
   },
-  /** Dates already spoken for, so auto-assignment doesn't reuse a player still queued up. */
-  scheduledPlayerIds() {
-    return db.prepare("SELECT player_id FROM schedule WHERE date >= date('now', '-365 day')")
-      .all().map((r) => r.player_id);
+  /**
+   * Dates already spoken for, so auto-assignment doesn't reuse a player still queued up.
+   * The cutoff is passed in for the same reason as above.
+   */
+  scheduledPlayerIds(since) {
+    return db
+      .prepare('SELECT player_id FROM schedule WHERE date >= ?')
+      .all(since)
+      .map((r) => r.player_id);
   },
 };
 

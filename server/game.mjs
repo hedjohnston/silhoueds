@@ -14,7 +14,10 @@ const START_BLUR = 34;
 export const MODES = ['hard', 'easy'];
 
 // Fallback zone: used for the admin's own "today" and whenever a visitor's zone is unknown.
-const DEFAULT_TIMEZONE = process.env.SILHOUEDS_TIMEZONE ?? 'UTC';
+// Australian rather than UTC because that is where this is run from — with UTC the admin spent
+// the ten hours Sydney is ahead reporting on yesterday's puzzle. An IANA name, not an offset,
+// so daylight saving is handled for us. Override with SILHOUEDS_TIMEZONE.
+const DEFAULT_TIMEZONE = process.env.SILHOUEDS_TIMEZONE ?? 'Australia/Sydney';
 
 /**
  * The date key a puzzle is filed under, in the given zone.
@@ -52,7 +55,8 @@ function autoAssign(date) {
   if (pool.length === 0) return null;
 
   // Prefer players not already queued on another date, so the schedule isn't undercut.
-  const spoken = new Set(schedule.scheduledPlayerIds());
+  const yearAgo = new Date(Date.parse(`${date}T00:00:00Z`) - 365 * 86400000).toISOString().slice(0, 10);
+  const spoken = new Set(schedule.scheduledPlayerIds(yearAgo));
   const fresh = pool.filter((p) => !spoken.has(p.id));
   const candidates = fresh.length > 0 ? fresh : pool;
 

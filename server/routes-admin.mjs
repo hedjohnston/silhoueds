@@ -9,6 +9,7 @@ import { players, schedule, plays } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
 import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
 import { storageStatus } from './storage.mjs';
+import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, playerForDate } from './game.mjs';
 import { closeness } from './matching.mjs';
 
@@ -255,7 +256,9 @@ adminRouter.get('/players/:id/silhouette-image', (req, res) => {
 });
 
 adminRouter.get('/schedule', (req, res) => {
-  res.json({ today: todayKey(), upcoming: schedule.upcoming(), stats: plays.stats(todayKey()) });
+  // The operator's own day, not the server's.
+  const today = todayKey(new Date(), zoneOf(req));
+  res.json({ today, upcoming: schedule.upcoming(today), stats: plays.stats(today) });
 });
 
 adminRouter.put('/schedule/:date', (req, res) => {
@@ -283,7 +286,9 @@ adminRouter.delete('/schedule/:date', (req, res) => {
  * are kept, so this shows what was guessed but never who guessed it.
  */
 adminRouter.get('/insights', (req, res) => {
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date ?? '') ? req.query.date : todayKey();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date ?? '')
+    ? req.query.date
+    : todayKey(new Date(), zoneOf(req));
   const player = playerForDate(date);
   const rounds = plays.forDate(date);
 

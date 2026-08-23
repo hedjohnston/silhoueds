@@ -3,19 +3,13 @@
 import express from 'express';
 import path from 'node:path';
 import { playSession } from './auth.mjs';
+import { zoneOf } from './request.mjs';
 import {
   loadRound, publicState, submitGuess, todayKey, resolveRoundDate, statsFor, setMode,
 } from './game.mjs';
 import { schedule, plays } from './db.mjs';
 
 const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
-
-// The browser reports its own zone so the puzzle rolls over at each player's local midnight.
-// A zone name is at most a handful of segments; anything else is ignored and the default applies.
-function zoneOf(req) {
-  const tz = req.query?.tz ?? req.body?.tz;
-  return typeof tz === 'string' && tz.length <= 64 ? tz : undefined;
-}
 
 /** Which round this request is for: today by default, or an earlier one from the archive. */
 function dateOf(req) {
