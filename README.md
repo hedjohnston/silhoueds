@@ -31,6 +31,7 @@ Two environment variables are required and the server refuses to boot without th
 | `SILHOUEDS_SECRET` | Signs the admin and play-session cookies |
 | `SILHOUEDS_ADMIN_PASSWORD` | The password for `/admin` |
 | `ANTHROPIC_API_KEY` | Optional — only for generating hints with Claude |
+| `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `UTC` (see below) |
 
 Storage is a SQLite file at `data/silhoueds.db`, via `node:sqlite` — built into Node 22.5+, so
 there is no native module to compile. Uploaded photos live in `data/uploads/`. Neither directory
@@ -80,6 +81,19 @@ npm run fetch-model
 
 The model is U^2-Net (u2netp, 4.4 MB, Apache-2.0), verified by checksum on download and stored in
 `models/`, which is git-ignored.
+
+## When the puzzle changes
+
+The puzzle rolls over at **each player's own local midnight**. The browser reports its timezone
+and the server files the round under that local date, so someone in Sydney moves to the next
+puzzle while someone in London is still on the previous one.
+
+Two consequences worth knowing: shared scores from different countries may be for different
+puzzles, and a player who changes their device timezone can pull the next puzzle early. The
+answer is still never sent before a round ends, so the most that buys is playing ahead.
+
+`SILHOUEDS_TIMEZONE` (default `UTC`) is the fallback when a browser reports no usable zone, and
+is what the admin uses for its own "today" and the play stats.
 
 ## Guess matching
 
@@ -146,6 +160,20 @@ Everything lives in one directory, set by two variables:
 | `SILHOUEDS_UPLOADS` | `data/uploads` | a folder on the same disk |
 
 Back that directory up. It is the whole game.
+
+**A missing volume does not announce itself.** `server/db.mjs` creates the directory if it is
+absent, so the game runs perfectly and then loses everything on the next restart or deploy. Two
+guards exist for exactly that: a loud warning in the startup logs, and a red banner across the top
+of the admin. If you see either, stop adding players and fix the mount first — `fly launch`
+rewriting `fly.toml` and dropping its `[[mounts]]` block is the usual cause. Check with:
+
+```sh
+fly volumes list                      # a volume should exist and be attached
+fly ssh console -C "df -h /data"      # /data should be its own filesystem, not the root overlay
+grep -A2 'mounts' fly.toml            # the [[mounts]] block must still be there
+```
+
+Set `SILHOUEDS_ACCEPT_EPHEMERAL=true` only if the data really is disposable.
 
 ### Fly.io
 

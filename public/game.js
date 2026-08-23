@@ -23,8 +23,19 @@ const dom = {
 let state = null;
 let busy = false;
 
+// The puzzle rolls over at the player's own local midnight, so the server needs their zone.
+const timeZone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+})();
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const separator = path.includes('?') ? '&' : '?';
+  const url = timeZone ? `${path}${separator}tz=${encodeURIComponent(timeZone)}` : path;
+  const response = await fetch(url, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
@@ -43,7 +54,9 @@ function renderSilhouette() {
   if (state.revealUrl) {
     const photo = document.createElement('img');
     photo.className = 'reveal';
-    photo.src = state.revealUrl;
+    photo.src = timeZone
+      ? `${state.revealUrl}?tz=${encodeURIComponent(timeZone)}`
+      : state.revealUrl;
     photo.alt = state.answer ? `Photo of ${state.answer}` : 'The answer revealed';
     dom.silhouette.append(photo);
     return;
@@ -51,7 +64,10 @@ function renderSilhouette() {
 
   if (state.silhouetteUrl) {
     const art = document.createElement('img');
-    art.src = state.silhouetteUrl;
+    // Image requests carry the zone too, so they resolve the same day as the round.
+    art.src = timeZone
+      ? `${state.silhouetteUrl}?tz=${encodeURIComponent(timeZone)}`
+      : state.silhouetteUrl;
     art.alt = "Today's silhouette";
     dom.silhouette.append(art);
     return;

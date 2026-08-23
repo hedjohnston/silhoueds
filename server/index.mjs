@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gameRouter } from './routes-game.mjs';
 import { adminRouter } from './routes-admin.mjs';
+import { warnIfEphemeral } from './storage.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT ?? 3000);
@@ -52,6 +53,7 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(PORT, () => {
+  warnIfEphemeral();
   console.log(`Silhoueds running at http://localhost:${PORT}`);
   console.log(`Admin at            http://localhost:${PORT}/admin`);
 });

@@ -6,13 +6,42 @@ import { matchesPlayer } from './matching.mjs';
 
 export const MAX_GUESSES = 6;
 
-export function todayKey(now = new Date()) {
-  return now.toISOString().slice(0, 10);
+// Fallback zone: used for the admin's own "today" and whenever a visitor's zone is unknown.
+const DEFAULT_TIMEZONE = process.env.SILHOUEDS_TIMEZONE ?? 'UTC';
+
+/**
+ * The date key a puzzle is filed under, in the given zone.
+ *
+ * Players roll over at their own local midnight, so the zone comes from the browser. An unknown
+ * or malformed zone falls back rather than throwing.
+ */
+export function todayKey(now = new Date(), timeZone = DEFAULT_TIMEZONE) {
+  try {
+    // en-CA formats as YYYY-MM-DD, which is the key format we want.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Does this player have artwork to show?
+ *
+ * Publishing and the day-picker both need this answer, and when they disagreed, players with
+ * uploaded artwork were publishable but never selected. One definition, used by both.
+ */
+export function hasArtwork(player) {
+  return Boolean(player?.silhouette_image || player?.silhouette);
 }
 
 /** Deterministic pick, so an unscheduled day still resolves the same way on every request. */
 function autoAssign(date) {
-  const pool = players.ready().filter((p) => p.silhouette);
+  const pool = players.ready().filter(hasArtwork);
   if (pool.length === 0) return null;
 
   // Prefer players not already queued on another date, so the schedule isn't undercut.
@@ -69,8 +98,8 @@ export function loadRound(sessionId, date = todayKey()) {
  * Apply one guess (or a skip) and persist it. Returns the new public state plus `spelling`,
  * which flags a match that only got through on fuzzy tolerance.
  */
-export function submitGuess(sessionId, rawGuess, { skipped = false } = {}) {
-  const date = todayKey();
+export function submitGuess(sessionId, rawGuess, { skipped = false, timeZone } = {}) {
+  const date = todayKey(new Date(), timeZone);
   const round = loadRound(sessionId, date);
   if (!round) return null;
 

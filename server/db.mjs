@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DB_PATH = process.env.SILHOUEDS_DB ?? 'data/silhoueds.db';
+export const DB_PATH = process.env.SILHOUEDS_DB ?? 'data/silhoueds.db';
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);

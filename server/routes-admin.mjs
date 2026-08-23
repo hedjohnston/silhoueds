@@ -9,7 +9,8 @@ import { players, schedule, plays } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
 import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
 import { photoToSilhouette, segmentationStatus } from './segment.mjs';
-import { todayKey } from './game.mjs';
+import { storageStatus } from './storage.mjs';
+import { todayKey, hasArtwork } from './game.mjs';
 
 const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -49,7 +50,7 @@ function uniqueSlug(name) {
 /** A player is only playable with artwork and at least one hint. */
 function readiness(player) {
   const missing = [];
-  if (!player.silhouette_image && !player.silhouette) missing.push('silhouette');
+  if (!hasArtwork(player)) missing.push('silhouette');
   if (!player.hints?.length) missing.push('hints');
   return missing;
 }
@@ -79,6 +80,7 @@ adminRouter.get('/session', async (req, res) => {
     signedIn: isAdmin(req),
     claudeConfigured: hasApiKey(),
     segmentation: await segmentationStatus(),
+    storage: storageStatus(),
     hintLabels: HINT_LABELS,
   });
 });

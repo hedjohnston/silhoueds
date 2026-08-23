@@ -8,7 +8,7 @@ const dom = Object.fromEntries(
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
-    'tracer-auto', 'tracer-threshold', 'seg-state',
+    'tracer-auto', 'tracer-threshold', 'seg-state', 'storage-alarm',
   ].map((id) => [id, el(id)]),
 );
 
@@ -411,7 +411,7 @@ dom['schedule-form'].onsubmit = async (event) => {
 // --- boot ----------------------------------------------------------------
 
 async function start() {
-  const { signedIn, claudeConfigured, segmentation: seg } = await api('/api/admin/session');
+  const { signedIn, claudeConfigured, segmentation: seg, storage } = await api('/api/admin/session');
   segmentation = seg ?? { available: false };
   dom.login.hidden = signedIn;
   dom.app.hidden = !signedIn;
@@ -419,6 +419,15 @@ async function start() {
 
   dom['claude-state'].textContent = claudeConfigured ? 'Claude connected' : 'No ANTHROPIC_API_KEY set';
   dom['claude-state'].className = `claude-state ${claudeConfigured ? 'ok' : 'warn'}`;
+
+  // The one failure that silently destroys work: writing to a disk that isn't persistent.
+  const ephemeral = storage && storage.checked && !storage.mounted;
+  dom['storage-alarm'].hidden = !ephemeral;
+  if (ephemeral) {
+    dom['storage-alarm'].textContent =
+      `Data is not on a persistent disk (${storage.directory}). Anything you add here will be ` +
+      `lost when the server restarts. Check that the volume is still mounted before adding players.`;
+  }
 
   dom['seg-state'].textContent = segmentation.available
     ? 'Auto silhouettes on'
