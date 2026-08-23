@@ -17,6 +17,18 @@ python3 -m http.server 8000    # or: npx serve .
 then open <http://localhost:8000>. It needs a server rather than `file://` because it loads
 ES modules and JSON with `fetch`. It deploys to GitHub Pages as-is.
 
+### Or build a single file
+
+To get a copy that opens by double-clicking, with no server at all:
+
+```sh
+node tools/build-standalone.mjs
+```
+
+That writes `dist/silhoueds.html` — the whole game in one file, with the data and silhouettes
+embedded and handed to the unchanged game code by a small `fetch` shim. Handy for sharing a
+playable copy. Rebuild it after changing anything under `src/`, `data/` or `public/`.
+
 ## How a round works
 
 - The puzzle is keyed to the UTC date. Days are grouped into cycles the size of the player pool
@@ -83,3 +95,4 @@ ours rather than a cut-out of someone's copyrighted image.
 | `data/roster.json` | Names offered by the autocomplete |
 | `public/silhouettes/` | The artwork |
 | `tools/trace-helper.mjs` | Photo → tracing page |
+| `tools/build-standalone.mjs` | Bundles the game into one self-contained HTML file |

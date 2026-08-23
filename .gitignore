@@ -2,3 +2,4 @@ assets/source/*
 !assets/source/.gitkeep
 *.trace.html
 node_modules/
+dist/
