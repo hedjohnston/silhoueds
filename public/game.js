@@ -1,0 +1,484 @@
+// Game client. It holds no answers and no player list — the server decides whether a guess is
+// right and hands back only the hints that have been earned.
+
+const el = (id) => document.getElementById(id);
+
+const dom = {
+  silhouette: el('silhouette'),
+  hints: el('hints'),
+  guessesLeft: el('guesses-left'),
+  history: el('guess-history'),
+  form: el('guess-form'),
+  input: el('guess-input'),
+  skip: el('skip-button'),
+  notice: el('notice'),
+  result: el('result'),
+  resultTitle: el('result-title'),
+  resultName: el('result-name'),
+  share: el('share-button'),
+  shareStatus: el('share-status'),
+  puzzleDate: el('puzzle-date'),
+  stats: el('stats'),
+  comeback: el('comeback'),
+  statsButton: el('stats-button'),
+  archiveButton: el('archive-button'),
+  sheet: el('sheet'),
+  sheetTitle: el('sheet-title'),
+  sheetBody: el('sheet-body'),
+  modes: el('modes'),
+  modeHard: el('mode-hard'),
+  modeEasy: el('mode-easy'),
+  modeNote: el('mode-note'),
+};
+
+const MODE_KEY = 'silhoueds:mode';
+
+function preferredMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'easy' ? 'easy' : 'hard';
+  } catch {
+    return 'hard';
+  }
+}
+
+function rememberMode(mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Private window or storage blocked — the round still knows its own mode server-side.
+  }
+}
+
+// Which round is on screen — today unless the archive opened an earlier one.
+let viewingDate = null;
+
+let state = null;
+let busy = false;
+
+// The puzzle rolls over at the player's own local midnight, so the server needs their zone.
+const timeZone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+})();
+
+function withParams(path) {
+  const params = new URLSearchParams();
+  if (timeZone) params.set('tz', timeZone);
+  if (viewingDate) params.set('date', viewingDate);
+  const query = params.toString();
+  if (!query) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}${query}`;
+}
+
+async function api(path, options = {}) {
+  const url = withParams(path);
+  const response = await fetch(url, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
+  return body;
+}
+
+function renderSilhouette() {
+  // Easy mode puts the photo on the stage from the start, blurred; the blur is the puzzle.
+  const source = state.revealUrl ?? state.photoUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
+  const key = `${source}|${state.photoUrl ? 'photo' : ''}`;
+
+  if (dom.silhouette.dataset.rendered === key) {
+    applyBlur();
+    return;
+  }
+  dom.silhouette.dataset.rendered = key;
+  dom.silhouette.innerHTML = '';
+
+  if (state.photoUrl && !state.revealUrl) {
+    const photo = document.createElement('img');
+    photo.className = 'reveal blurred';
+    photo.src = withParams(state.photoUrl);
+    photo.alt = "Today's player, coming into focus";
+    dom.silhouette.append(photo);
+    applyBlur();
+    return;
+  }
+
+  if (state.revealUrl) {
+    const photo = document.createElement('img');
+    photo.className = 'reveal';
+    photo.src = withParams(state.revealUrl);
+    photo.alt = state.answer ? `Photo of ${state.answer}` : 'The answer revealed';
+    dom.silhouette.append(photo);
+    return;
+  }
+
+  if (state.silhouetteUrl) {
+    const art = document.createElement('img');
+    // Image requests carry the zone too, so they resolve the same day as the round.
+    art.src = withParams(state.silhouetteUrl);
+    art.alt = "Today's silhouette";
+    dom.silhouette.append(art);
+    return;
+  }
+
+  // A traced outline is inlined as SVG so CSS `color` can style it.
+  dom.silhouette.innerHTML = state.silhouette ?? '';
+}
+
+/** Scale a touch as well, so the softened edge never shows the frame behind it. */
+function applyBlur() {
+  const photo = dom.silhouette.querySelector('img.blurred');
+  if (!photo) return;
+  const blur = state.blur ?? 0;
+  photo.style.filter = blur > 0 ? `blur(${blur}px)` : '';
+  photo.style.transform = blur > 0 ? 'scale(1.08)' : '';
+}
+
+function renderModes() {
+  const locked = state.guesses.length > 0 || state.finished;
+  const unavailable = !state.easyAvailable;
+
+  for (const button of [dom.modeHard, dom.modeEasy]) {
+    const active = button.dataset.mode === state.mode;
+    button.classList.toggle('mode-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+
+  dom.modeEasy.disabled = locked || unavailable;
+  dom.modeHard.disabled = locked;
+
+  dom.modeNote.textContent = unavailable
+    ? 'Easy mode needs a photo, and today\'s puzzle has none.'
+    : locked
+      ? 'Locked in for this round.'
+      : '';
+}
+
+async function chooseMode(mode) {
+  if (state.mode === mode) return;
+  rememberMode(mode);
+  try {
+    state = await api('/api/mode', { method: 'POST', body: JSON.stringify({ mode }) });
+    render();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+function renderHints() {
+  dom.hints.innerHTML = '';
+
+  if (state.hints.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint-empty';
+    empty.textContent = 'No hints yet — a wrong guess or a skip reveals one.';
+    dom.hints.append(empty);
+    return;
+  }
+
+  const card = document.createElement('section');
+  card.className = 'hint-card';
+
+  const head = document.createElement('header');
+  head.className = 'hint-card-head';
+  const title = document.createElement('span');
+  title.textContent = 'Hints';
+  const count = document.createElement('span');
+  count.className = 'hint-count';
+  count.textContent = `${state.hints.length} of ${state.hintsTotal ?? state.hints.length}`;
+  head.append(title, count);
+
+  const list = document.createElement('ol');
+  list.className = 'hint-rows';
+
+  state.hints.forEach((hint, index) => {
+    const row = document.createElement('li');
+    // The newest hint is the new information, so it carries a tint.
+    row.className = index === state.hints.length - 1 ? 'hint hint-latest' : 'hint';
+
+    const badge = document.createElement('span');
+    badge.className = 'hint-index';
+    badge.textContent = String(index + 1);
+    badge.setAttribute('aria-hidden', 'true');
+
+    const body = document.createElement('span');
+    body.className = 'hint-body';
+    const label = document.createElement('span');
+    label.className = 'hint-label';
+    label.textContent = hint.label;
+    const value = document.createElement('span');
+    value.className = 'hint-value';
+    value.textContent = hint.value;
+    body.append(label, value);
+
+    row.append(badge, body);
+    list.append(row);
+  });
+
+  card.append(head, list);
+  dom.hints.append(card);
+}
+
+function renderHistory() {
+  dom.history.innerHTML = '';
+  for (const guess of state.guesses) {
+    const row = document.createElement('li');
+    row.className = guess.correct
+      ? 'guess guess-correct'
+      : guess.skipped
+        ? 'guess guess-skipped'
+        : 'guess guess-wrong';
+    row.textContent = guess.skipped ? 'Skipped' : guess.name;
+    dom.history.append(row);
+  }
+}
+
+function render() {
+  renderModes();
+  renderSilhouette();
+  renderHints();
+  renderHistory();
+
+  dom.guessesLeft.textContent =
+    `${state.guessesLeft} ${state.guessesLeft === 1 ? 'guess' : 'guesses'} left`;
+  // Once the round is over these reserve empty space above the result, so drop them.
+  dom.guessesLeft.hidden = state.finished;
+  dom.notice.hidden = state.finished;
+
+  dom.form.hidden = state.finished;
+  dom.skip.hidden = state.finished;
+  dom.result.hidden = !state.finished;
+
+  if (state.finished) {
+    dom.resultTitle.textContent = state.won ? 'Got it!' : 'Out of guesses';
+    dom.resultName.textContent = state.answer ?? '';
+    renderCountdown();
+    api('/api/stats')
+      .then((stats) => renderStats(dom.stats, stats, state.won ? state.guesses.length : null))
+      .catch(() => {});
+  }
+}
+
+function notify(message) {
+  dom.notice.textContent = message ?? '';
+}
+
+async function send(path, body) {
+  if (busy || state?.finished) return;
+  busy = true;
+  dom.input.disabled = true;
+  try {
+    const next = await api(path, {
+      method: 'POST',
+      body: JSON.stringify({ ...(body ?? {}), tz: timeZone, date: viewingDate ?? undefined }),
+    });
+    const spelling = next.spelling;
+    state = next;
+    dom.input.value = '';
+    render();
+    notify(spelling ? 'Close enough on the spelling — counted as correct.' : '');
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    busy = false;
+    dom.input.disabled = false;
+    if (!state.finished) dom.input.focus();
+  }
+}
+
+/** Wordle-style grid: one square per guess, green only on the winning one. */
+function shareText() {
+  const squares = state.guesses
+    .map((guess) => (guess.correct ? '🟩' : guess.skipped ? '⬜' : '🟥'))
+    .join('');
+  const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
+  const marker = state.mode === 'easy' ? ' easy' : '';
+  // The link is the point: without it nobody who sees this can find the game.
+  return `Silhoueds ${state.date} ${score}${marker}\n${squares}\n${location.origin}`;
+}
+
+/** Four figures and a bar per guess count, so a win reads in context. */
+function renderStats(target, stats, highlight) {
+  target.innerHTML = '';
+
+  const figures = document.createElement('dl');
+  figures.className = 'stat-figures';
+  const cells = [
+    ['Played', stats.played],
+    ['Win %', stats.winRate],
+    ['Streak', stats.currentStreak],
+    ['Best', stats.bestStreak],
+  ];
+  for (const [label, value] of cells) {
+    const cell = document.createElement('div');
+    const number = document.createElement('dt');
+    number.textContent = String(value);
+    const name = document.createElement('dd');
+    name.textContent = label;
+    cell.append(number, name);
+    figures.append(cell);
+  }
+  target.append(figures);
+
+  if (stats.played === 0) return;
+
+  const most = Math.max(1, ...Object.values(stats.distribution));
+  const chart = document.createElement('div');
+  chart.className = 'stat-chart';
+  for (let n = 1; n <= stats.maxGuesses; n++) {
+    const count = stats.distribution[n] ?? 0;
+    const row = document.createElement('div');
+    row.className = n === highlight ? 'stat-row stat-row-current' : 'stat-row';
+    const key = document.createElement('span');
+    key.className = 'stat-key';
+    key.textContent = String(n);
+    const bar = document.createElement('span');
+    bar.className = 'stat-bar';
+    bar.style.width = `${Math.max(8, (count / most) * 100)}%`;
+    bar.textContent = String(count);
+    row.append(key, bar);
+    chart.append(row);
+  }
+  const caption = document.createElement('p');
+  caption.className = 'stat-caption';
+  caption.textContent = 'Guesses used, when you got it';
+  target.append(caption, chart);
+}
+
+async function showStats() {
+  try {
+    const stats = await api('/api/stats');
+    dom.sheetTitle.textContent = 'Your stats';
+    renderStats(dom.sheetBody, stats, null);
+    dom.sheet.showModal();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+const STATUS_TEXT = { solved: 'Solved', failed: 'Missed', started: 'In progress', unplayed: 'Not played' };
+
+async function showArchive() {
+  try {
+    const { entries } = await api('/api/archive');
+    dom.sheetTitle.textContent = 'Past puzzles';
+    dom.sheetBody.innerHTML = '';
+
+    if (entries.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'sheet-empty';
+      empty.textContent = 'No past puzzles yet — today is the first.';
+      dom.sheetBody.append(empty);
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'archive';
+    for (const entry of entries) {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.className = `archive-entry archive-${entry.status}`;
+      const when = document.createElement('span');
+      when.textContent = entry.today
+        ? 'Today'
+        : new Date(`${entry.date}T00:00:00Z`).toLocaleDateString(undefined, {
+            day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+          });
+      const status = document.createElement('span');
+      status.className = 'archive-status';
+      const played = entry.guesses
+        ? `${STATUS_TEXT[entry.status]} in ${entry.guesses}`
+        : STATUS_TEXT[entry.status];
+      // Mark easy rounds so past results stay comparable.
+      status.textContent = entry.mode === 'easy' ? `${played} · easy` : played;
+      button.append(when, status);
+      button.onclick = () => {
+        dom.sheet.close();
+        openRound(entry.today ? null : entry.date);
+      };
+      item.append(button);
+      list.append(item);
+    }
+    dom.sheetBody.append(list);
+    dom.sheet.showModal();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+/** Time until this player's own next midnight — the rollover is local to them. */
+function renderCountdown() {
+  if (!state?.finished) return;
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const left = midnight - now;
+  const hours = Math.floor(left / 3600000);
+  const minutes = Math.floor((left % 3600000) / 60000);
+  dom.comeback.textContent = viewingDate
+    ? 'That was a past puzzle — open today from Past puzzles.'
+    : `Next silhouette in ${hours}h ${minutes}m.`;
+}
+
+async function copyShare() {
+  const text = shareText();
+  try {
+    await navigator.clipboard.writeText(text);
+    dom.shareStatus.textContent = 'Copied to clipboard';
+  } catch {
+    dom.shareStatus.textContent = text;
+  }
+}
+
+async function openRound(date) {
+  viewingDate = date;
+  notify('');
+  try {
+    state = await api('/api/puzzle');
+  } catch (error) {
+    notify(error.message);
+    dom.form.hidden = true;
+    dom.skip.hidden = true;
+    return;
+  }
+
+  dom.puzzleDate.textContent = new Date(`${state.date}T00:00:00Z`).toLocaleDateString(undefined, {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  });
+  dom.silhouette.dataset.rendered = '';
+
+  const wanted = preferredMode();
+  if (wanted !== state.mode && state.guesses.length === 0 && !state.finished && state.easyAvailable) {
+    try {
+      state = await api('/api/mode', { method: 'POST', body: JSON.stringify({ mode: wanted }) });
+    } catch {
+      // Keep whatever the server says the round is.
+    }
+  }
+
+  render();
+  if (!state.finished) dom.input.focus();
+}
+
+async function init() {
+  await openRound(null);
+  if (!state) return;
+
+  dom.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const guess = dom.input.value.trim();
+    if (guess) send('/api/guess', { guess });
+  });
+  dom.skip.addEventListener('click', () => send('/api/skip'));
+  dom.share.addEventListener('click', copyShare);
+  dom.modeHard.addEventListener('click', () => chooseMode('hard'));
+  dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
+  dom.statsButton.addEventListener('click', showStats);
+  dom.archiveButton.addEventListener('click', showArchive);
+  setInterval(renderCountdown, 30000);
+}
+
+init();

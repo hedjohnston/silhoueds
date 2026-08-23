@@ -1,0 +1,488 @@
+/* Palette and component idiom follow Minute Cryptic: off-white ground, pastel blocks, heavy
+   black outlines with a hard offset shadow, Sansita for display and Mulish for text. */
+
+:root {
+  --ground: #fcfcfc;
+  --card: #f4f5f6;
+  --ink: #000000;
+  --muted: #596170;
+  --line: #000000;
+
+  --blue: #d5e8ff;
+  --blue-deep: #add3ff;
+  --pink: #f5d1fd;
+  --green: #befac4;
+  --red: #ffa7a7;
+  --yellow: #fff2b1;
+  --grey: #9f9f9f;
+  --grey-light: #f2f2f2;
+
+  --shadow: 3px 3px 0 0 var(--line);
+  --shadow-press: 1px 1px 0 0 var(--line);
+  --radius-card: 16px;
+
+  --display: Sansita, Georgia, "Times New Roman", serif;
+  --text: Mulish, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The design commits to one light world, so it paints its own ground rather than inheriting
+   the host's theme. */
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(10px, 3vw, 32px) clamp(10px, 3vw, 16px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- masthead --- */
+
+.header { text-align: center; }
+
+.logo {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(34px, 9vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.tagline { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+
+.date {
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- difficulty --- */
+
+.modes {
+  display: flex;
+  gap: 0;
+  align-self: center;
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  background: #fff;
+}
+
+.mode {
+  padding: 8px 22px;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  font-size: 15px;
+}
+
+.mode + .mode { border-left: 3px solid var(--line); }
+.mode:hover:not(:disabled) { transform: none; background: var(--grey-light); }
+.mode:active:not(:disabled) { transform: none; box-shadow: none; }
+.mode-active { background: var(--pink); }
+.mode-active:hover:not(:disabled) { background: var(--pink); }
+.mode:disabled { opacity: 1; color: var(--grey); cursor: not-allowed; }
+.mode-active:disabled { color: var(--ink); opacity: 0.75; }
+
+.mode-note {
+  margin: -8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  min-height: 16px;
+}
+
+.mode-note:empty { display: none; }
+
+/* --- the puzzle --- */
+
+.stage {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  min-height: 300px;
+  background: var(--blue);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+
+.silhouette { color: var(--ink); line-height: 0; }
+
+.silhouette svg, .silhouette img {
+  display: block;
+  height: clamp(210px, 40vh, 320px);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* The reveal photo replaces the silhouette when the round ends. */
+.silhouette img.reveal {
+  border-radius: 8px;
+  border: 3px solid var(--line);
+}
+
+/* Easy mode: the photo sharpens a step with every hint. Clipped so the scaled, softened edge
+   never shows past the frame. */
+.silhouette img.blurred {
+  will-change: filter;
+  transition: filter 600ms ease, transform 600ms ease;
+}
+
+.stage { overflow: hidden; }
+
+/* --- hints --- */
+
+.history, .hint-rows { list-style: none; margin: 0; padding: 0; }
+
+/* Revealed hints get the same panel treatment as the stage and the result box, so they read as
+   part of the same object rather than loose text. */
+.hint-card {
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.hint-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 16px;
+  background: var(--yellow);
+  border-bottom: 3px solid var(--line);
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hint-count { font-family: var(--text); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; }
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 16px;
+}
+
+.hint + .hint { border-top: 2px solid rgb(0 0 0 / 0.1); }
+
+.hint-latest { background: #fffdf4; }
+
+/* The number is the rung of the hint ladder, not decoration — hints always arrive in this order. */
+.hint-index {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  background: var(--blue);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+
+.hint-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Long values (a list of leagues) wrap rather than pushing the panel wide. */
+.hint-value { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+
+.hint-empty {
+  margin: 0;
+  padding: 11px 14px;
+  text-align: center;
+  border: 3px dashed var(--grey);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* --- guesses --- */
+
+.history { display: flex; flex-direction: column; gap: 8px; }
+
+.guess {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--red);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.guess::before {
+  content: "✕";
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.guess-correct { background: var(--green); }
+.guess-correct::before { content: "✓"; }
+
+.guess.guess-skipped { background: var(--grey-light); color: var(--muted); }
+.guess.guess-skipped::before { content: "→"; }
+
+.guesses-left {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* No reserved height: an empty notice would leave a dead band above the input. */
+.notice:empty { display: none; }
+.notice { margin: 0; text-align: center; font-size: 14px; font-weight: 600; }
+
+/* --- controls --- */
+
+.guess-form { display: flex; gap: 10px; }
+
+.input-wrap { flex: 1; }
+
+#guess-input {
+  width: 100%;
+  padding: 13px 18px;
+  font: inherit;
+  font-size: 16px; /* keeps iOS from zooming on focus */
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+#guess-input::placeholder { color: var(--grey); font-weight: 500; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--ink);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+button:hover:not(:disabled) { transform: scale(1.04); }
+button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: var(--shadow-press); }
+button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+:focus-visible { outline: 3px solid var(--muted); outline-offset: 3px; }
+
+.primary { padding: 13px 26px; background: var(--pink); font-size: 17px; }
+
+.ghost { width: 100%; padding: 12px; background: #fff; font-size: 16px; }
+
+/* --- result --- */
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 20px;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.result-title { margin: 0; font-family: var(--display); font-size: 26px; }
+
+.result-name {
+  margin: 0;
+  padding: 7px 20px;
+  background: var(--green);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.share-status { margin: 0; min-height: 20px; font-size: 14px; color: var(--muted); white-space: pre-line; }
+
+.comeback { margin: 0; font-size: 13px; color: var(--muted); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  button:hover:not(:disabled) { transform: none; }
+}
+
+/* --- stats --- */
+
+.stats { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+.stat-figures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.stat-figures dt {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-figures dd {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-caption {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-chart { display: flex; flex-direction: column; gap: 5px; }
+
+.stat-row { display: flex; align-items: center; gap: 8px; }
+
+.stat-key {
+  flex: 0 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.stat-bar {
+  padding: 2px 8px;
+  background: var(--grey-light);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-row-current .stat-bar { background: var(--green); }
+
+/* --- footer nav and sheet --- */
+
+.footer-nav { display: flex; justify-content: center; gap: 20px; }
+
+.link {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-family: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover { color: var(--ink); }
+.link:hover:not(:disabled) { transform: none; }
+
+.sheet {
+  width: min(420px, 92vw);
+  padding: 18px;
+  background: var(--ground);
+  color: var(--ink);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+
+.sheet::backdrop { background: rgb(0 0 0 / 0.45); }
+.sheet-close { display: flex; justify-content: flex-end; }
+.sheet-close button { border: none; background: none; box-shadow: none; font-size: 18px; color: var(--muted); }
+.sheet-title { margin: 0 0 12px; font-family: var(--display); font-size: 22px; }
+.sheet-empty { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+
+.archive { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow-y: auto; }
+
+.archive-entry {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.archive-entry:hover:not(:disabled) { transform: none; background: var(--grey-light); }
+.archive-status { font-size: 12px; font-weight: 800; color: var(--muted); }
+.archive-solved { background: var(--green); }
+.archive-failed { background: var(--red); }
+.archive-started { background: var(--yellow); }

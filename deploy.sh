@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Fix the repo state and deploy. Safe to re-run.
+#
+#   bash deploy.sh
+#
+# Resolves the merge conflict, clears leftovers, makes sure fly.toml still mounts the volume,
+# commits, creates the volume if it is missing, deploys, and then proves the data is on a real
+# disk rather than trusting that it is.
+
+set -uo pipefail
+
+# Whatever branch is checked out, so this keeps working after the work is merged to main.
+# Falls back to the repo's default branch when HEAD is detached or has no remote counterpart.
+resolve_branch() {
+  local current
+  current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -n "$current" ] && git rev-parse --verify --quiet "origin/$current" >/dev/null 2>&1; then
+    printf '%s' "$current"
+    return
+  fi
+  local fallback
+  fallback=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+  printf '%s' "${fallback:-main}"
+}
+
+VOLUME="silhoueds_data"
+
+# fly.toml is written by different tools with different quoting, so read values tolerantly.
+toml_value() {
+  grep -E "^[[:space:]]*$1[[:space:]]*=" fly.toml 2>/dev/null | head -1 \
+    | sed -E "s/^[^=]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"'].*$//; s/[[:space:]]*$//"
+}
+
+say()  { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
+ok()   { printf '    \033[32m✓\033[0m %s\n' "$1"; }
+warn() { printf '    \033[33m!\033[0m %s\n' "$1"; }
+die()  { printf '\n\033[31mStopped: %s\033[0m\n' "$1" >&2; exit 1; }
+
+cd "$(dirname "$0")" || die "could not enter the project folder"
+
+# ---------------------------------------------------------------- prerequisites
+command -v git >/dev/null || die "git is not installed"
+command -v fly >/dev/null || die "the Fly CLI is not installed. Run: brew install flyctl"
+fly auth whoami >/dev/null 2>&1 || die "not signed in to Fly. Run: fly auth login"
+
+say "Getting the latest code"
+git fetch origin --quiet || die "could not reach GitHub"
+
+BRANCH=$(resolve_branch)
+ok "tracking branch: $BRANCH"
+
+# The app name is the one thing here that is yours rather than mine, so carry it across.
+PREV_APP=$(toml_value app)
+
+# Keep a way back before touching anything.
+BACKUP="backup/$(date +%Y%m%d-%H%M%S)"
+git branch "$BACKUP" >/dev/null 2>&1 || true
+
+# Clear anything half-finished from an earlier attempt, then take origin's version of every
+# tracked file. Nothing in this repo is edited locally except fly.toml, which is rebuilt below.
+git merge --abort >/dev/null 2>&1 || true
+git rebase --abort >/dev/null 2>&1 || true
+git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -b "$BRANCH" "origin/$BRANCH"
+git reset --hard "origin/$BRANCH" --quiet || die "could not update to the latest code"
+ok "updated to the latest code (previous state kept as branch $BACKUP)"
+
+if [ -n "$(git ls-files --unmerged)" ]; then
+  die "there are still conflicted files — paste this to Claude"
+fi
+
+if [ -d models ]; then
+  rm -rf models
+  ok "removed the leftover models/ folder"
+fi
+
+# ---------------------------------------------------------------- fly.toml
+say "Checking fly.toml"
+[ -f fly.toml ] || die "fly.toml is missing entirely — paste this to Claude"
+
+APP=$(toml_value app)
+
+# origin's fly.toml carries my app name; put theirs back if it differed.
+if [ -n "$PREV_APP" ] && [ "$PREV_APP" != "$APP" ]; then
+  awk -v app="$PREV_APP" '\
+    /^[[:space:]]*app[[:space:]]*=/ && !seen { print "app = \"" app "\""; seen=1; next } { print }' \
+    fly.toml > fly.toml.tmp && mv fly.toml.tmp fly.toml
+  APP=$PREV_APP
+  ok "kept your app name: $APP"
+fi
+
+[ -n "$APP" ] || die "fly.toml has no app name — paste this to Claude"
+
+APPS=$(fly apps list 2>/dev/null | awk 'NR>1 {print $1}' | grep -v '^$')
+if [ -z "$APPS" ]; then
+  warn "couldn't list your Fly apps; trusting fly.toml"
+elif ! printf '%s\n' "$APPS" | grep -qx "$APP"; then
+  die "fly.toml names an app called '$APP', which isn't in your Fly account.
+       Your apps are:
+$(printf '%s\n' "$APPS" | sed 's/^/         /')
+       Edit the 'app =' line in fly.toml to one of those, then re-run this."
+fi
+ok "deploying to app: $APP"
+
+# The mount is the whole ballgame: without it the database is wiped on every restart.
+if ! grep -q '\[\[mounts\]\]' fly.toml; then
+  cat >> fly.toml <<'TOML'
+
+[[mounts]]
+  source = "silhoueds_data"
+  destination = "/data"
+TOML
+  ok "restored the [[mounts]] block"
+else
+  ok "[[mounts]] block present"
+fi
+
+if ! grep -q 'SILHOUEDS_DB' fly.toml; then
+  cat >> fly.toml <<'TOML'
+
+[env]
+  PORT = "3000"
+  SILHOUEDS_DB = "/data/silhoueds.db"
+  SILHOUEDS_UPLOADS = "/data/uploads"
+TOML
+  ok "restored the [env] block"
+else
+  ok "data paths present"
+fi
+
+# ---------------------------------------------------------------- commit
+say "Saving your changes"
+if [ -n "$(git status --porcelain -- fly.toml package-lock.json)" ]; then
+  git add fly.toml package-lock.json
+  git commit -q -m "Restore volume mount and resolve lockfile" || true
+  git push -q origin HEAD 2>/dev/null && ok "committed and pushed" || warn "committed locally (push failed — not fatal)"
+else
+  ok "nothing to commit"
+fi
+
+if [ -n "$(git stash list 2>/dev/null)" ]; then
+  warn "you have a leftover stash — harmless. 'git stash list' to see it."
+fi
+
+# ---------------------------------------------------------------- volume
+say "Making sure the disk exists"
+if fly volumes list -a "$APP" 2>/dev/null | grep -q "$VOLUME"; then
+  ok "volume '$VOLUME' already exists"
+else
+  REGION=$(toml_value primary_region)
+  REGION=${REGION:-syd}
+  fly volumes create "$VOLUME" --size 1 --region "$REGION" -a "$APP" --yes \
+    || die "could not create the volume — paste the error above to Claude"
+  ok "created volume '$VOLUME' in $REGION"
+fi
+
+# ---------------------------------------------------------------- deploy
+say "Deploying (this takes a few minutes)"
+fly deploy -a "$APP" || die "the deploy failed — paste the error above to Claude"
+
+say "Only one machine should run, so the database isn't split in two"
+fly scale count 1 -a "$APP" --yes >/dev/null 2>&1 && ok "scaled to one machine" || warn "could not scale; check 'fly status'"
+
+# ---------------------------------------------------------------- prove it
+say "Checking the data is on a real disk"
+MOUNT=$(fly ssh console -a "$APP" -C "df -h /data" 2>/dev/null | tail -1)
+if printf '%s' "$MOUNT" | grep -qi 'overlay'; then
+  die "/data is still the container's own filesystem, so data will still be wiped.
+       Paste this to Claude:
+       $MOUNT"
+elif [ -z "$MOUNT" ]; then
+  warn "couldn't read /data (the machine may still be starting). Re-run this script in a minute."
+else
+  ok "/data is a real volume:"
+  printf '      %s\n' "$MOUNT"
+fi
+
+HOST=$(fly status -a "$APP" 2>/dev/null | grep -i hostname | awk '{print $NF}' | tr -d '"')
+HOST=${HOST:-$APP.fly.dev}
+
+say "Done"
+cat <<DONE
+    Game:  https://$HOST
+    Admin: https://$HOST/admin
+
+    Next, in this order:
+      1. Open the admin and sign in.
+      2. Check there is NO red banner across the top.
+         If there is one, stop and tell Claude — data is still not safe.
+      3. Add your players, publish them.
+      4. Send friends the game link (not the admin one).
+DONE

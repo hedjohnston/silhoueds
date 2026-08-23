@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="Silhouette of a bald footballer standing upright with one foot resting on top of the ball">
+  <g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- arms held clear of the body, elbows out -->
+    <path d="M170 138 L132 196 L142 254" fill="none" stroke-width="23"/>
+    <path d="M230 138 L268 196 L258 254" fill="none" stroke-width="23"/>
+    <circle cx="142" cy="260" r="14"/>
+    <circle cx="258" cy="260" r="14"/>
+    <!-- standing leg, planted -->
+    <path d="M182 250 L176 358 L172 462" fill="none" stroke-width="34"/>
+    <path d="M172 456 q-4 24 0 32 l-56 2 q-9 -14 5 -22 l32 -16 z"/>
+    <!-- the ball, sitting on the ground line -->
+    <circle cx="292" cy="454" r="34"/>
+    <!-- front leg reaching out, sole resting on top of the ball -->
+    <path d="M218 248 L254 340 L272 400" fill="none" stroke-width="34"/>
+    <path d="M256 396 q34 2 54 18 q7 11 -5 17 q-32 6 -56 -10 z"/>
+    <!-- torso -->
+    <path d="M166 124 q34 -13 68 0 l10 80 q-8 34 -14 50 l-60 0 q-6 -16 -14 -50 z"/>
+    <ellipse cx="170" cy="132" rx="21" ry="17"/>
+    <ellipse cx="230" cy="132" rx="21" ry="17"/>
+    <!-- short neck and clean-shaven head -->
+    <rect x="187" y="100" width="26" height="28" rx="11"/>
+    <ellipse cx="200" cy="76" rx="29" ry="32"/>
+  </g>
+</svg>

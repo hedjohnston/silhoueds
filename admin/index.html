@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Silhoueds admin</title>
+  <meta name="color-scheme" content="light">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sansita:wght@700&family=Mulish:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="login" id="login">
+    <form class="login-card" id="login-form">
+      <h1>Silhoueds admin</h1>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">Sign in</button>
+      <p class="error" id="login-error" role="alert"></p>
+    </form>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <p class="alarm" id="storage-alarm" role="alert" hidden></p>
+    <header class="topbar">
+      <h1>Silhoueds admin</h1>
+      <div class="topbar-actions">
+        <span class="claude-state" id="claude-state"></span>
+        <a href="/" target="_blank" rel="noopener">View game</a>
+        <button class="ghost" id="logout">Sign out</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Add a footballer</h2>
+      <form class="add-form" id="add-form">
+        <div class="field">
+          <label for="new-name">Name</label>
+          <input id="new-name" placeholder="e.g. Ronaldinho" required>
+        </div>
+        <div class="field">
+          <label for="new-silhouette">Silhouette image</label>
+          <input id="new-silhouette" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/svg+xml">
+        </div>
+        <div class="field">
+          <label for="new-photo">Full photo</label>
+          <input id="new-photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif">
+        </div>
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <p class="hint-text">
+        Upload the silhouette and the full photo. The silhouette is the puzzle; the full photo is
+        revealed once the round is over. Claude drafts the hints from the name alone — the images
+        are never sent anywhere. Nothing goes live until you publish it.
+      </p>
+      <p class="error" id="add-error" role="alert"></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Players</h2>
+        <p class="counts" id="counts"></p>
+      </div>
+      <ul class="players" id="players"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Schedule</h2>
+      <p class="hint-text">
+        Unscheduled days pick a ready player automatically. Set a date to override.
+      </p>
+      <form class="schedule-form" id="schedule-form">
+        <input type="date" id="schedule-date" required>
+        <select id="schedule-player" required></select>
+        <button class="primary" type="submit">Schedule</button>
+      </form>
+      <ul class="schedule" id="schedule"></ul>
+      <p class="error" id="schedule-error" role="alert"></p>
+    </section>
+  </div>
+
+  <dialog class="tracer" id="tracer">
+    <form method="dialog" class="tracer-close"><button aria-label="Close">✕</button></form>
+    <h2 id="tracer-title">Trace silhouette</h2>
+    <p class="hint-text">
+      For a player you have no silhouette image for. Click around the outline to drop points —
+      drag one to move it, click it to remove it, and the shape closes itself.
+    </p>
+    <div class="tracer-body">
+      <div class="tracer-stage" id="tracer-stage">
+        <img id="tracer-photo" alt="Reference photo">
+        <svg id="tracer-svg" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="tracer-preview">
+        <h3>Preview</h3>
+        <div class="preview-box" id="tracer-preview"></div>
+        <div class="tracer-controls">
+          <label><input type="checkbox" id="tracer-smooth" checked> Smooth curve</label>
+          <label><input type="range" id="tracer-dim" min="0" max="100" value="55"> Photo fade</label>
+          <button class="ghost" id="tracer-undo" type="button">Undo point</button>
+          <button class="ghost" id="tracer-clear" type="button">Clear all</button>
+          <button class="primary" id="tracer-save" type="button">Save silhouette</button>
+        </div>
+        <p class="error" id="tracer-error" role="alert"></p>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

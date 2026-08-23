@@ -1,0 +1,10 @@
+node_modules
+data
+.git
+.github
+.env
+*.db
+*.db-shm
+*.db-wal
+captured-request.json
+README.md

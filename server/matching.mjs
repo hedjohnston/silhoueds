@@ -1,0 +1,61 @@
+// Guess matching. With no dropdown, players type names freely — so matching has to forgive
+// accents, punctuation, casing and small misspellings.
+
+/** Fold a name to a comparable key: lowercase, accent-free, alphanumerics only. */
+export function normalize(value) {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** Levenshtein distance, capped — we only care about small edit distances. */
+export function editDistance(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 3) return 4;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+/** How far off a guess may be before it stops counting — longer names earn more slack. */
+function tolerance(length) {
+  if (length <= 5) return 0;
+  if (length <= 9) return 1;
+  if (length <= 14) return 2;
+  return 3;
+}
+
+/**
+ * Does `guess` name this player? Compares against the full name and every alias, exactly first
+ * and then within a length-scaled edit distance.
+ *
+ * Returns { matched, exact } — `exact` distinguishes a clean hit from a forgiven typo, so the
+ * caller can tell the player their spelling was off.
+ */
+export function matchesPlayer(guess, { name, aliases = [] }) {
+  const key = normalize(guess);
+  if (!key) return { matched: false, exact: false };
+
+  const candidates = [name, ...aliases].map(normalize).filter(Boolean);
+  if (candidates.includes(key)) return { matched: true, exact: true };
+
+  for (const candidate of candidates) {
+    const allowed = tolerance(Math.max(key.length, candidate.length));
+    if (allowed > 0 && editDistance(key, candidate) <= allowed) {
+      return { matched: true, exact: false };
+    }
+  }
+  return { matched: false, exact: false };
+}
