@@ -25,7 +25,29 @@ const dom = {
   sheet: el('sheet'),
   sheetTitle: el('sheet-title'),
   sheetBody: el('sheet-body'),
+  modes: el('modes'),
+  modeHard: el('mode-hard'),
+  modeEasy: el('mode-easy'),
+  modeNote: el('mode-note'),
 };
+
+const MODE_KEY = 'silhoueds:mode';
+
+function preferredMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'easy' ? 'easy' : 'hard';
+  } catch {
+    return 'hard';
+  }
+}
+
+function rememberMode(mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Private window or storage blocked — the round still knows its own mode server-side.
+  }
+}
 
 // Which round is on screen — today unless the archive opened an earlier one.
 let viewingDate = null;
@@ -63,11 +85,26 @@ async function api(path, options = {}) {
 }
 
 function renderSilhouette() {
-  // Once the round is over, the full photo takes the stage.
-  const key = state.revealUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
-  if (dom.silhouette.dataset.rendered === key) return;
+  // Easy mode puts the photo on the stage from the start, blurred; the blur is the puzzle.
+  const source = state.revealUrl ?? state.photoUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
+  const key = `${source}|${state.photoUrl ? 'photo' : ''}`;
+
+  if (dom.silhouette.dataset.rendered === key) {
+    applyBlur();
+    return;
+  }
   dom.silhouette.dataset.rendered = key;
   dom.silhouette.innerHTML = '';
+
+  if (state.photoUrl && !state.revealUrl) {
+    const photo = document.createElement('img');
+    photo.className = 'reveal blurred';
+    photo.src = withParams(state.photoUrl);
+    photo.alt = "Today's player, coming into focus";
+    dom.silhouette.append(photo);
+    applyBlur();
+    return;
+  }
 
   if (state.revealUrl) {
     const photo = document.createElement('img');
@@ -89,6 +126,46 @@ function renderSilhouette() {
 
   // A traced outline is inlined as SVG so CSS `color` can style it.
   dom.silhouette.innerHTML = state.silhouette ?? '';
+}
+
+/** Scale a touch as well, so the softened edge never shows the frame behind it. */
+function applyBlur() {
+  const photo = dom.silhouette.querySelector('img.blurred');
+  if (!photo) return;
+  const blur = state.blur ?? 0;
+  photo.style.filter = blur > 0 ? `blur(${blur}px)` : '';
+  photo.style.transform = blur > 0 ? 'scale(1.08)' : '';
+}
+
+function renderModes() {
+  const locked = state.guesses.length > 0 || state.finished;
+  const unavailable = !state.easyAvailable;
+
+  for (const button of [dom.modeHard, dom.modeEasy]) {
+    const active = button.dataset.mode === state.mode;
+    button.classList.toggle('mode-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+
+  dom.modeEasy.disabled = locked || unavailable;
+  dom.modeHard.disabled = locked;
+
+  dom.modeNote.textContent = unavailable
+    ? 'Easy mode needs a photo, and today\'s puzzle has none.'
+    : locked
+      ? 'Locked in for this round.'
+      : '';
+}
+
+async function chooseMode(mode) {
+  if (state.mode === mode) return;
+  rememberMode(mode);
+  try {
+    state = await api('/api/mode', { method: 'POST', body: JSON.stringify({ mode }) });
+    render();
+  } catch (error) {
+    notify(error.message);
+  }
 }
 
 function renderHints() {
@@ -160,6 +237,7 @@ function renderHistory() {
 }
 
 function render() {
+  renderModes();
   renderSilhouette();
   renderHints();
   renderHistory();
@@ -217,8 +295,9 @@ function shareText() {
     .map((guess) => (guess.correct ? '🟩' : guess.skipped ? '⬜' : '🟥'))
     .join('');
   const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
+  const marker = state.mode === 'easy' ? ' easy' : '';
   // The link is the point: without it nobody who sees this can find the game.
-  return `Silhoueds ${state.date} ${score}\n${squares}\n${location.origin}`;
+  return `Silhoueds ${state.date} ${score}${marker}\n${squares}\n${location.origin}`;
 }
 
 /** Four figures and a bar per guess count, so a win reads in context. */
@@ -309,9 +388,11 @@ async function showArchive() {
           });
       const status = document.createElement('span');
       status.className = 'archive-status';
-      status.textContent = entry.guesses
+      const played = entry.guesses
         ? `${STATUS_TEXT[entry.status]} in ${entry.guesses}`
         : STATUS_TEXT[entry.status];
+      // Mark easy rounds so past results stay comparable.
+      status.textContent = entry.mode === 'easy' ? `${played} · easy` : played;
       button.append(when, status);
       button.onclick = () => {
         dom.sheet.close();
@@ -368,6 +449,16 @@ async function openRound(date) {
     timeZone: 'UTC',
   });
   dom.silhouette.dataset.rendered = '';
+
+  const wanted = preferredMode();
+  if (wanted !== state.mode && state.guesses.length === 0 && !state.finished && state.easyAvailable) {
+    try {
+      state = await api('/api/mode', { method: 'POST', body: JSON.stringify({ mode: wanted }) });
+    } catch {
+      // Keep whatever the server says the round is.
+    }
+  }
+
   render();
   if (!state.finished) dom.input.focus();
 }
@@ -383,6 +474,8 @@ async function init() {
   });
   dom.skip.addEventListener('click', () => send('/api/skip'));
   dom.share.addEventListener('click', copyShare);
+  dom.modeHard.addEventListener('click', () => chooseMode('hard'));
+  dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
   setInterval(renderCountdown, 30000);

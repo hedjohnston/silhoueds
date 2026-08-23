@@ -65,6 +65,26 @@ so there is nothing to identify, and keeping photos out of the request avoids us
 face recognition. Your images never leave your machine at all. Claude is asked to report
 `known: false` rather than invent a career for a name it doesn't recognise.
 
+## Difficulty
+
+Two modes, chosen with a toggle above the puzzle and remembered for next time.
+
+- **Hard** — the original game. A black silhouette, and the colour photo is not sent to the
+  browser at all until the round is over.
+- **Easy** — the colour photo takes the stage from the start, blurred to 34px, sharpening a step
+  with every hint earned and clearing when the round ends. Kit colours and posture read early,
+  the face last.
+
+The mode belongs to the round, not the browser: it is stored on the play and **locked once the
+first guess is made**, so a round can't be started hard and finished easy. Easy rounds are marked
+in the share text and in the archive. Easy needs a full photo, so the toggle is disabled with a
+reason on a day whose player has only a silhouette.
+
+**The easy-mode blur is applied in the browser**, so a player who goes looking can open the image
+and see it sharp. That is an accepted trade — easy mode is opt-in, the game is self-scored, and
+blurring server-side would mean re-adding an image library and a few hundred MB to the container.
+Hard mode is unaffected: its photo is never sent early.
+
 ## What players get
 
 - **Hints** arrive one per miss, in a fixed ladder, shown in a panel that counts them off.
@@ -120,6 +140,7 @@ Public:
 | `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day |
 | `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
 | `POST /api/skip` | Burns a guess to reveal a hint |
+| `POST /api/mode` | `{ mode }` → sets hard or easy; refused once the round has a guess |
 | `GET /api/stats` | This visitor's played, win rate, streaks and guess distribution |
 | `GET /api/archive` | Past puzzles and how this visitor did on each |
 

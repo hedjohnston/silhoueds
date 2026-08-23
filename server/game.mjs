@@ -6,6 +6,12 @@ import { matchesPlayer } from './matching.mjs';
 
 export const MAX_GUESSES = 6;
 
+// Easy mode starts here and sharpens with every hint. It never reaches zero while the round is
+// live — the last hint should still leave something to guess at.
+const START_BLUR = 34;
+
+export const MODES = ['hard', 'easy'];
+
 // Fallback zone: used for the admin's own "today" and whenever a visitor's zone is unknown.
 const DEFAULT_TIMEZONE = process.env.SILHOUEDS_TIMEZONE ?? 'UTC';
 
@@ -140,11 +146,28 @@ function revealedHints(player, guesses) {
   return player.hints.slice(0, Math.min(misses, player.hints.length));
 }
 
+/** How blurred the photo should be, given how far through the hints the player is. */
+function blurFor(player, guesses, finished) {
+  if (finished) return 0;
+  const revealed = revealedHints(player, guesses).length;
+  const rungs = (player.hints.length || 1) + 1;
+  return Math.round(START_BLUR * (1 - revealed / rungs));
+}
+
 /** What the browser is allowed to know about the current round. */
 export function publicState(player, play) {
   const guesses = play?.guesses ?? [];
   const finished = play?.finished ?? false;
+  const mode = play?.mode ?? 'hard';
+  // Easy mode needs the full photo; the admin makes it optional, so it may not exist.
+  const easyAvailable = Boolean(player.reveal_image);
+  const easy = mode === 'easy' && easyAvailable;
   return {
+    mode: easy ? 'easy' : 'hard',
+    easyAvailable,
+    // In easy mode the photo stands in for the silhouette from the start, blurred.
+    photoUrl: easy && !finished ? '/api/puzzle/reveal' : null,
+    blur: easy ? blurFor(player, guesses, finished) : 0,
     date: play?.date,
     // Uploaded artwork is served through the API; a traced outline is inlined as SVG.
     silhouetteUrl: player.silhouette_image ? '/api/puzzle/silhouette' : null,
@@ -167,8 +190,36 @@ export function publicState(player, play) {
 export function loadRound(sessionId, date = todayKey()) {
   const player = playerForDate(date);
   if (!player) return null;
-  const play = plays.get(sessionId, date) ?? { date, guesses: [], finished: false, won: false };
+  const play = plays.get(sessionId, date) ?? {
+    date,
+    guesses: [],
+    finished: false,
+    won: false,
+    mode: 'hard',
+  };
   return { player, play };
+}
+
+/**
+ * Choose the difficulty for a round.
+ *
+ * Refused once a guess exists: a round started hard and finished easy would quietly make scores
+ * mean different things. Easy also needs a full photo to reveal, so it is refused without one.
+ */
+export function setMode(sessionId, date, requested) {
+  const round = loadRound(sessionId, date);
+  if (!round) return null;
+
+  const { player, play } = round;
+  const wanted = MODES.includes(requested) ? requested : 'hard';
+  const allowed =
+    play.guesses.length === 0 && !play.finished && (wanted === 'hard' || player.reveal_image);
+
+  if (allowed && wanted !== play.mode) {
+    play.mode = wanted;
+    plays.save(sessionId, date, play);
+  }
+  return { ...publicState(player, { ...play, date }), locked: play.guesses.length > 0 };
 }
 
 /**

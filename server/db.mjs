@@ -59,6 +59,12 @@ for (const [name, definition] of [
   if (!columns.has(name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
 
+// Difficulty belongs to the round, not the browser, so it lives on the play.
+const playColumns = new Set(db.prepare('PRAGMA table_info(plays)').all().map((c) => c.name));
+if (!playColumns.has('mode')) {
+  db.exec("ALTER TABLE plays ADD COLUMN mode TEXT NOT NULL DEFAULT 'hard'");
+}
+
 const parse = (row) =>
   row && {
     ...row,
@@ -176,27 +182,40 @@ export const schedule = {
 export const plays = {
   get(sessionId, date) {
     const row = db.prepare('SELECT * FROM plays WHERE session_id = ? AND date = ?').get(sessionId, date);
-    return row && { ...row, guesses: JSON.parse(row.guesses), finished: !!row.finished, won: !!row.won };
+    return (
+      row && {
+        ...row,
+        guesses: JSON.parse(row.guesses),
+        finished: !!row.finished,
+        won: !!row.won,
+        mode: row.mode ?? 'hard',
+      }
+    );
   },
-  save(sessionId, date, { guesses, finished, won }) {
+  save(sessionId, date, { guesses, finished, won, mode = 'hard' }) {
     db.prepare(
-      `INSERT INTO plays (session_id, date, guesses, finished, won)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO plays (session_id, date, guesses, finished, won, mode)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(session_id, date) DO UPDATE SET
          guesses = excluded.guesses, finished = excluded.finished,
-         won = excluded.won, updated_at = datetime('now')`,
-    ).run(sessionId, date, JSON.stringify(guesses), finished ? 1 : 0, won ? 1 : 0);
+         won = excluded.won, mode = excluded.mode, updated_at = datetime('now')`,
+    ).run(sessionId, date, JSON.stringify(guesses), finished ? 1 : 0, won ? 1 : 0, mode);
   },
   /** Every finished round for one visitor, newest first — the raw material for stats. */
   history(sessionId) {
     return db
       .prepare(
-        `SELECT date, won, guesses FROM plays
+        `SELECT date, won, guesses, mode FROM plays
          WHERE session_id = ? AND finished = 1
          ORDER BY date DESC`,
       )
       .all(sessionId)
-      .map((row) => ({ date: row.date, won: !!row.won, guesses: JSON.parse(row.guesses) }));
+      .map((row) => ({
+        date: row.date,
+        won: !!row.won,
+        guesses: JSON.parse(row.guesses),
+        mode: row.mode ?? 'hard',
+      }));
   },
   stats(date) {
     return db

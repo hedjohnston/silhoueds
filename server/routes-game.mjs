@@ -3,7 +3,9 @@
 import express from 'express';
 import path from 'node:path';
 import { playSession } from './auth.mjs';
-import { loadRound, publicState, submitGuess, todayKey, resolveRoundDate, statsFor } from './game.mjs';
+import {
+  loadRound, publicState, submitGuess, todayKey, resolveRoundDate, statsFor, setMode,
+} from './game.mjs';
 import { schedule, plays } from './db.mjs';
 
 const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
@@ -52,7 +54,8 @@ gameRouter.get('/puzzle/reveal', (req, res) => {
   if (!date) return res.status(404).end();
   const round = loadRound(sessionId, date);
   if (!round?.player.reveal_image) return res.status(404).end();
-  if (!round.play.finished) return res.status(403).end();
+  // Hard mode keeps the photo back until the round is over; easy mode is the opt-in exception.
+  if (!round.play.finished && round.play.mode !== 'easy') return res.status(403).end();
   res.sendFile(path.resolve(UPLOAD_DIR, round.player.reveal_image));
 });
 
@@ -66,6 +69,17 @@ gameRouter.post('/guess', (req, res) => {
 gameRouter.post('/skip', (req, res) => {
   const sessionId = playSession(req, res);
   const state = submitGuess(sessionId, '', { skipped: true, timeZone: zoneOf(req), date: req.body?.date });
+  if (!state) return res.status(503).json({ error: 'No puzzle is ready yet.' });
+  res.json(state);
+});
+
+// Choose the difficulty. Refused once the round has a guess — the reply always carries the
+// current state, so a client that is out of step simply re-renders with the truth.
+gameRouter.post('/mode', (req, res) => {
+  const sessionId = playSession(req, res);
+  const date = dateOf(req);
+  if (!date) return res.status(404).json({ error: 'No puzzle for that date.' });
+  const state = setMode(sessionId, date, req.body?.mode);
   if (!state) return res.status(503).json({ error: 'No puzzle is ready yet.' });
   res.json(state);
 });
@@ -87,6 +101,7 @@ gameRouter.get('/archive', (req, res) => {
       today: date === today,
       status: !play?.finished ? (play ? 'started' : 'unplayed') : play.won ? 'solved' : 'failed',
       guesses: play?.finished && play.won ? play.guesses.length : null,
+      mode: play?.mode ?? 'hard',
     };
   });
   res.json({ today, entries });
