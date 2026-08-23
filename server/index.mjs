@@ -12,6 +12,10 @@ const PORT = Number(process.env.PORT ?? 3000);
 
 const app = express();
 app.disable('x-powered-by');
+
+// Behind a platform's TLS terminator (Fly, Railway, a reverse proxy), so req.protocol and
+// req.ip reflect the original request rather than the hop from the proxy.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 
 // Minimal cookie parsing — the only cookies we set are our own two signed ones.
@@ -28,6 +32,9 @@ app.use((req, res, next) => {
   );
   next();
 });
+
+// Platform health checks.
+app.get('/healthz', (req, res) => res.json({ ok: true }));
 
 app.use('/api', gameRouter);
 app.use('/api/admin', adminRouter);

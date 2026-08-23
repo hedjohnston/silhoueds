@@ -133,6 +133,74 @@ Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GE
 
 ## Deploying
 
-One process, one SQLite file — it runs anywhere Node does. Set the environment variables, put it
-behind TLS, and set `NODE_ENV=production` so cookies are marked `secure`. Persist `data/` across
-deploys, or you lose your players and their artwork.
+The game needs a real server with a **persistent disk** — there is a SQLite database and a folder
+of uploaded images. Static hosts and serverless platforms (Vercel, Netlify, GitHub Pages) cannot
+run it: their filesystems are read-only or wiped between requests, so the game would lose every
+player you add.
+
+Everything lives in one directory, set by two variables:
+
+| Variable | Default | Set it to |
+| --- | --- | --- |
+| `SILHOUEDS_DB` | `data/silhoueds.db` | a path on the persistent disk |
+| `SILHOUEDS_UPLOADS` | `data/uploads` | a folder on the same disk |
+
+Back that directory up. It is the whole game.
+
+### Fly.io
+
+`Dockerfile` and `fly.toml` are ready to go. With the [flyctl CLI](https://fly.io/docs/flyctl/install/)
+installed:
+
+```sh
+fly launch --no-deploy            # pick a name; keep the existing fly.toml when asked
+fly volumes create silhoueds_data --size 1        # the persistent disk
+fly secrets set \
+  SILHOUEDS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" \
+  SILHOUEDS_ADMIN_PASSWORD='pick-a-strong-password' \
+  ANTHROPIC_API_KEY='sk-ant-...'
+fly deploy
+fly scale count 1                 # exactly one machine — see below
+```
+
+Then seed the starter players once:
+
+```sh
+fly ssh console -C "node --disable-warning=ExperimentalWarning /app/server/seed.mjs"
+```
+
+The game is at `https://<your-app>.fly.dev`, the admin at `/admin`.
+
+**Run exactly one machine.** The database is a SQLite file on a single volume, so a second
+machine would serve its own separate copy of the game.
+
+### Anywhere else
+
+The `Dockerfile` is generic — it works on Railway, Render, a VPS, or anything that runs a
+container. Whatever you use:
+
+- Mount a persistent volume at `/data` (the image already points both paths there).
+- Set `SILHOUEDS_SECRET`, `SILHOUEDS_ADMIN_PASSWORD`, and `ANTHROPIC_API_KEY`.
+- Serve it over HTTPS. `NODE_ENV=production` is set in the image, which marks the cookies
+  `Secure` — over plain HTTP browsers will drop them and nobody will stay signed in.
+- Run one instance.
+
+Without Docker, any host with Node 22.5+ works: clone, `npm ci`, set the variables, `npm start`,
+and put a reverse proxy with TLS in front.
+
+### Image size
+
+By default the image skips `onnxruntime-node` and `sharp`, which only power the
+cut-a-silhouette-from-a-photo fallback — a few hundred MB for something you don't need if you
+upload your own silhouettes. The admin will show "Auto silhouettes off". To include them:
+
+```sh
+fly deploy --build-arg INCLUDE_AUTOCUT=true
+```
+
+### Before you publish
+
+- Change `SILHOUEDS_ADMIN_PASSWORD` from anything you have used locally. `/admin` is protected by
+  that password alone.
+- Add a few players and schedule them, so visitors do not land on an empty puzzle.
+- Check the game at `/` in a private window — that is what everyone else sees.
