@@ -315,7 +315,7 @@ function renderStats(target, stats, highlight) {
     ['Played', stats.played],
     ['Win %', stats.winRate],
     ['Streak', stats.currentStreak],
-    ['Best', stats.bestStreak],
+    ['Best', stats.bestGuesses ?? '—'],
   ];
   for (const [label, value] of cells) {
     const cell = document.createElement('div');
