@@ -210,7 +210,23 @@ grep -A2 'mounts' fly.toml            # the [[mounts]] block must still be there
 
 Set `SILHOUEDS_ACCEPT_EPHEMERAL=true` only if the data really is disposable.
 
-### Fly.io
+### Automatic deploys
+
+`.github/workflows/fly-deploy.yml` deploys every push to `main`, and can also be run by hand from
+the repo's Actions tab. It needs one repository secret:
+
+```sh
+fly tokens create deploy -a <your-app-name>
+```
+
+Add the output at **Settings → Secrets and variables → Actions → New repository secret**, named
+`FLY_API_TOKEN`. The token is scoped to deploying this one app and can be revoked at any time with
+`fly tokens revoke`. Paste it into GitHub, never into a chat or a commit.
+
+With that in place, `deploy.sh` is only needed for the first deploy of a new app, or to create the
+volume.
+
+### Fly.io (by hand)
 
 `Dockerfile` and `fly.toml` are ready to go. With the [flyctl CLI](https://fly.io/docs/flyctl/install/)
 installed:

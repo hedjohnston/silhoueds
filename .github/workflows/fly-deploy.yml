@@ -1,0 +1,35 @@
+# Deploy to Fly.io on every push to main.
+#
+# Needs one repository secret, FLY_API_TOKEN. Mint a token scoped to deploying just this app:
+#
+#   fly tokens create deploy -a <your-app-name>
+#
+# then add it at Settings -> Secrets and variables -> Actions -> New repository secret.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Also runnable by hand from the Actions tab, for a redeploy without a code change.
+  workflow_dispatch:
+
+# A push while a deploy is running supersedes it, rather than racing it. Deploys in progress are
+# allowed to finish, since cancelling one midway can leave the app part-updated.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
