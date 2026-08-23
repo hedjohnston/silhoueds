@@ -15,8 +15,8 @@ const dom = {
   result: el('result'),
   resultTitle: el('result-title'),
   resultName: el('result-name'),
-  share: el('share-button'),
-  shareStatus: el('share-status'),
+  share: Array.from(document.querySelectorAll('.share-button')),
+  shareStatus: Array.from(document.querySelectorAll('.share-status')),
   puzzleDate: el('puzzle-date'),
   stats: el('stats'),
   comeback: el('comeback'),
@@ -315,7 +315,7 @@ function renderStats(target, stats, highlight) {
     ['Played', stats.played],
     ['Win %', stats.winRate],
     ['Streak', stats.currentStreak],
-    ['Best', stats.bestGuesses ?? '—'],
+    ['Longest', stats.bestStreak],
   ];
   for (const [label, value] of cells) {
     const cell = document.createElement('div');
@@ -427,14 +427,19 @@ function renderCountdown() {
     : `Next silhouette in ${hours}h ${minutes}m.`;
 }
 
+/** The share button appears above and below the stats, so status has to reach both lines. */
+function setShareStatus(text) {
+  for (const line of dom.shareStatus) line.textContent = text;
+}
+
 async function copyToClipboard() {
   const text = shareText();
   try {
     await navigator.clipboard.writeText(text);
-    dom.shareStatus.textContent = 'Copied to clipboard';
+    setShareStatus('Copied to clipboard');
   } catch {
     // No clipboard access — show it so it can at least be copied by hand.
-    dom.shareStatus.textContent = text;
+    setShareStatus(text);
   }
 }
 
@@ -450,7 +455,7 @@ async function share() {
   if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
     try {
       await navigator.share(payload);
-      dom.shareStatus.textContent = '';
+      setShareStatus('');
       return;
     } catch (error) {
       // Dismissing the sheet is a choice, not a failure — say nothing and stop.
@@ -503,7 +508,7 @@ async function init() {
     if (guess) send('/api/guess', { guess });
   });
   dom.skip.addEventListener('click', () => send('/api/skip'));
-  dom.share.addEventListener('click', share);
+  for (const button of dom.share) button.addEventListener('click', share);
   dom.modeHard.addEventListener('click', () => chooseMode('hard'));
   dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
   dom.statsButton.addEventListener('click', showStats);

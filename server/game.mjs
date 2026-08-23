@@ -130,18 +130,12 @@ export function statsFor(sessionId, today) {
     expected = nextDay(date);
   }
 
-  // Fewest guesses in a winning round — null until there is a win to measure.
-  const bestGuesses = wins.length === 0
-    ? null
-    : Math.min(...wins.map((round) => round.guesses.length));
-
   return {
     played,
     won: wins.length,
     winRate: played === 0 ? 0 : Math.round((wins.length / played) * 100),
     currentStreak,
     bestStreak,
-    bestGuesses,
     distribution,
     maxGuesses: MAX_GUESSES,
   };
