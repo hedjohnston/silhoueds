@@ -9,7 +9,20 @@
 
 set -uo pipefail
 
-BRANCH="claude/football-silhouette-game-pqxv6t"
+# Whatever branch is checked out, so this keeps working after the work is merged to main.
+# Falls back to the repo's default branch when HEAD is detached or has no remote counterpart.
+resolve_branch() {
+  local current
+  current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -n "$current" ] && git rev-parse --verify --quiet "origin/$current" >/dev/null 2>&1; then
+    printf '%s' "$current"
+    return
+  fi
+  local fallback
+  fallback=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+  printf '%s' "${fallback:-main}"
+}
+
 VOLUME="silhoueds_data"
 
 # fly.toml is written by different tools with different quoting, so read values tolerantly.
@@ -32,6 +45,9 @@ fly auth whoami >/dev/null 2>&1 || die "not signed in to Fly. Run: fly auth logi
 
 say "Getting the latest code"
 git fetch origin --quiet || die "could not reach GitHub"
+
+BRANCH=$(resolve_branch)
+ok "tracking branch: $BRANCH"
 
 # The app name is the one thing here that is yours rather than mine, so carry it across.
 PREV_APP=$(toml_value app)
