@@ -100,8 +100,10 @@ Hard mode is unaffected: its photo is never sent early.
   most desktop browsers), falling back to the clipboard. The link is passed separately from the
   grid so it doesn't appear twice in the message.
 - **Installable** — a web manifest and an `apple-touch-icon`, so the game can be added to the
-  Home Screen and opens without browser chrome. Icons are committed; `tools/make-icons.mjs`
-  regenerates them and needs Playwright via `npx` (deliberately not a project dependency).
+  Home Screen and opens without browser chrome. Icons are committed; regenerate them with
+  `node tools/make-icons.mjs --source assets/icon-source.jpg`, which needs Playwright via `npx`
+  (deliberately not a project dependency). `--source` accepts a screenshot of the game's own
+  stage — it finds the panel, steps past the frame and crops the figure out.
 - **No accidental zoom** — the game blocks pinch-zoom where the platform allows it, and kills
   double-tap zoom and the iOS zoom-on-input everywhere. iOS Safari ignores the viewport flag by
   design, so the targeted fixes carry it there. The admin keeps normal zoom, being a desk tool.

@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 // Render the app icons used for the home-screen / PWA install.
 //
-//   node tools/make-icons.mjs [--out <dir>]
+//   node tools/make-icons.mjs [--out <dir>] [--source <image>]
+//
+// With --source, the silhouette is taken from an image — including a screenshot of the game's
+// own stage: the pale panel is detected, the frame stepped past, and the figure inside it cropped
+// out. Without it, a figure drawn here is used.
 //
 // The figure is drawn for the purpose and is not a player in rotation, so the icon can never
 // spoil a puzzle. Re-run after changing the palette in public/styles.css.
 
 import { chromium } from 'playwright-core'; // dev-only: npx playwright-core
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Output defaults to public/ next to this script, but --out lets the script be run from a copy
 // elsewhere (it needs Playwright, which the project deliberately does not depend on).
+const sourceFlag = process.argv.indexOf('--source');
+const source = sourceFlag >= 0 ? path.resolve(process.argv[sourceFlag + 1]) : null;
 const outFlag = process.argv.indexOf('--out');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = outFlag >= 0
@@ -50,13 +57,98 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
 });
 
+/**
+ * Find the silhouette in a source image.
+ *
+ * Handles a screenshot of the game's own stage: locate the pale panel, step inside its black
+ * frame (or the frame itself reads as the figure), then take the bounding box of the dark pixels
+ * within. Falls back to scanning the whole image when there is no panel.
+ */
+async function findFigure(file) {
+  const page = await browser.newPage();
+  const dataUri = `data:image/${path.extname(file).slice(1)};base64,${fs.readFileSync(file).toString('base64')}`;
+
+  const box = await page.evaluate(async (src) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const at = (x, y) => {
+      const i = (y * canvas.width + x) * 4;
+      return [pixels[i], pixels[i + 1], pixels[i + 2]];
+    };
+    const isPanel = ([r, g, b]) => b > 200 && b - r > 20 && r > 180 && g > 190;
+    const isDark = ([r, g, b]) => r < 90 && g < 90 && b < 90;
+
+    let px0 = Infinity, py0 = Infinity, px1 = -1, py1 = -1;
+    for (let y = 0; y < canvas.height; y += 2) {
+      for (let x = 0; x < canvas.width; x += 2) {
+        if (isPanel(at(x, y))) {
+          if (x < px0) px0 = x; if (x > px1) px1 = x;
+          if (y < py0) py0 = y; if (y > py1) py1 = y;
+        }
+      }
+    }
+    if (px1 < 0) { px0 = 0; py0 = 0; px1 = canvas.width - 1; py1 = canvas.height - 1; }
+
+    const pad = Math.round(Math.min(px1 - px0, py1 - py0) * 0.035);
+    let fx0 = Infinity, fy0 = Infinity, fx1 = -1, fy1 = -1;
+    for (let y = py0 + pad; y <= py1 - pad; y++) {
+      for (let x = px0 + pad; x <= px1 - pad; x++) {
+        if (isDark(at(x, y))) {
+          if (x < fx0) fx0 = x; if (x > fx1) fx1 = x;
+          if (y < fy0) fy0 = y; if (y > fy1) fy1 = y;
+        }
+      }
+    }
+    if (fx1 < 0) return null;
+    return { x: fx0, y: fy0, w: fx1 - fx0 + 1, h: fy1 - fy0 + 1, imageW: img.width, imageH: img.height, src };
+  }, dataUri);
+
+  await page.close();
+  if (!box) throw new Error(`no silhouette found in ${file}`);
+  console.log(`  found figure ${box.w}x${box.h} at ${box.x},${box.y} in ${path.basename(file)}`);
+  return box;
+}
+
+const figure = source ? await findFigure(source) : null;
+
+/**
+ * The cropped figure, anchored to the bottom of the icon.
+ *
+ * A torso-crop silhouette has a hard horizontal cut where the photo ended; running it off the
+ * bottom edge reads as framing rather than as a figure sliced in half.
+ */
+function figureMarkup(size, inset) {
+  const boxH = Math.round(size * (1 - inset * 1.15));
+  const scale = boxH / figure.h;
+  const boxW = Math.round(figure.w * scale);
+  return `<div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+      width:${boxW}px;height:${boxH}px;overflow:hidden">
+    <img src="${figure.src}" style="position:absolute;
+      width:${Math.round(figure.imageW * scale)}px;
+      height:${Math.round(figure.imageH * scale)}px;
+      left:${-Math.round(figure.x * scale)}px;
+      top:${-Math.round(figure.y * scale)}px;
+      max-width:none">
+  </div>`;
+}
+
 for (const { file, size, inset } of ICONS) {
   const page = await browser.newPage({ viewport: { width: size, height: size } });
+  const body = figure
+    ? figureMarkup(size, inset)
+    : FIGURE.replace('<svg', `<svg style="height:${Math.round(size * (1 - inset * 2))}px"`);
   await page.setContent(`<style>
     *{margin:0;box-sizing:border-box}
-    body{width:${size}px;height:${size}px;background:${BLUE};display:grid;place-items:center}
-    svg{height:${Math.round(size * (1 - inset * 2))}px}
-  </style>${FIGURE}`);
+    body{width:${size}px;height:${size}px;background:${BLUE};display:grid;place-items:center;
+         position:relative;overflow:hidden}
+  </style>${body}`);
   await page.waitForTimeout(120);
   await page.screenshot({ path: path.join(outDir, file) });
   await page.close();

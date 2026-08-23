@@ -9,3 +9,6 @@ assets/source/*
 *.trace.html
 .env
 captured-request.json
+
+# Icon source artwork is kept so the icons can be regenerated.
+!assets/icon-source.jpg
