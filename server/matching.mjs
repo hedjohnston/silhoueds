@@ -59,3 +59,31 @@ export function matchesPlayer(guess, { name, aliases = [] }) {
   }
   return { matched: false, exact: false };
 }
+
+/**
+ * How close a guess came, without the yes/no verdict.
+ *
+ * Used by the admin's guess log to spot near-misses: names that fell just outside the tolerance
+ * and so cost someone the puzzle, which usually means an alias is missing. Shares `tolerance()`
+ * with the matcher, so "just outside" always means the same thing in both places.
+ */
+export function closeness(guess, { name, aliases = [] }) {
+  const key = normalize(guess);
+  if (!key) return { matched: false, distance: Infinity, tolerance: 0 };
+
+  const candidates = [name, ...aliases].map(normalize).filter(Boolean);
+  let best = Infinity;
+  let allowed = 0;
+  let span = key.length;
+
+  for (const candidate of candidates) {
+    const distance = candidate === key ? 0 : editDistance(key, candidate);
+    if (distance < best) {
+      best = distance;
+      span = Math.max(key.length, candidate.length);
+      allowed = tolerance(span);
+    }
+  }
+
+  return { matched: best <= allowed, distance: best, tolerance: allowed, length: span };
+}

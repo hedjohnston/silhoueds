@@ -9,7 +9,8 @@ import { players, schedule, plays } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
 import { generateHints, hasApiKey, HINT_LABELS } from './claude.mjs';
 import { storageStatus } from './storage.mjs';
-import { todayKey, hasArtwork } from './game.mjs';
+import { todayKey, hasArtwork, playerForDate } from './game.mjs';
+import { closeness } from './matching.mjs';
 
 const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -273,4 +274,80 @@ adminRouter.put('/schedule/:date', (req, res) => {
 adminRouter.delete('/schedule/:date', (req, res) => {
   schedule.clear(req.params.date);
   res.json({ ok: true, upcoming: schedule.upcoming() });
+});
+
+/**
+ * What people guessed on a given day.
+ *
+ * Every guess is already stored against an anonymous session id — no names, emails or addresses
+ * are kept, so this shows what was guessed but never who guessed it.
+ */
+adminRouter.get('/insights', (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date ?? '') ? req.query.date : todayKey();
+  const player = playerForDate(date);
+  const rounds = plays.forDate(date);
+
+  let solved = 0;
+  let totalGuesses = 0;
+  const modes = { easy: 0, hard: 0 };
+  const wrong = new Map();
+  const near = new Map();
+
+  for (const round of rounds) {
+    if (round.won) solved++;
+    totalGuesses += round.guesses.length;
+    modes[round.mode] = (modes[round.mode] ?? 0) + 1;
+
+    for (const guess of round.guesses) {
+      if (guess.correct || guess.skipped || !guess.name) continue;
+      const key = guess.name.trim();
+      if (!key) continue;
+      wrong.set(key.toLowerCase(), (wrong.get(key.toLowerCase()) ?? 0) + 1);
+
+      if (!player) continue;
+      // A typo that just missed, not a different player. Two tests, because either alone is
+      // wrong: an absolute cap (editDistance returns 4 when strings are far apart) and a
+      // proportional one, since 2 edits is a typo in a long name but a different word in a
+      // four-letter one — without it, an alias like "zizo" makes "figo" look like a near miss.
+      const how = closeness(key, player);
+      const isNearMiss =
+        !how.matched &&
+        how.distance <= Math.min(3, how.tolerance + 2) &&
+        how.distance / Math.max(1, how.length) <= 1 / 3;
+      if (isNearMiss) {
+        const entry = near.get(key.toLowerCase()) ?? { name: key, count: 0, distance: how.distance };
+        entry.count++;
+        near.set(key.toLowerCase(), entry);
+      }
+    }
+  }
+
+  const byCount = (a, b) => b.count - a.count;
+
+  res.json({
+    date,
+    player: player ? { id: player.id, name: player.name, aliases: player.aliases } : null,
+    summary: {
+      players: rounds.length,
+      solved,
+      solveRate: rounds.length ? Math.round((solved / rounds.length) * 100) : 0,
+      averageGuesses: rounds.length ? Number((totalGuesses / rounds.length).toFixed(1)) : 0,
+      modes,
+    },
+    wrongGuesses: [...wrong.entries()].map(([name, count]) => ({ name, count })).sort(byCount).slice(0, 15),
+    nearMisses: [...near.values()].sort(byCount),
+    log: rounds.map((round) => ({
+      // Enough to tell rounds apart, not enough to identify anyone.
+      session: round.session.slice(0, 6),
+      won: round.won,
+      finished: round.finished,
+      mode: round.mode,
+      updatedAt: round.updatedAt,
+      guesses: round.guesses.map((g) => (g.skipped ? '(skipped)' : g.name)),
+    })),
+  });
+});
+
+adminRouter.get('/insights/dates', (req, res) => {
+  res.json({ dates: plays.playedDates() });
 });

@@ -99,6 +99,22 @@ Hard mode is unaffected: its photo is never sent early.
   scrapers don't run JavaScript, so `server/index.mjs` serves `/` through a substitution rather
   than as a static file.
 
+## What people guessed
+
+Every guess is stored against an anonymous session id, so the admin's **What people guessed**
+panel can show, for any day anyone played:
+
+- **A summary** — players, solve rate, average guesses, and the easy/hard split.
+- **Common wrong guesses** — who people confuse with who.
+- **Near misses** — typos that fell just outside the matcher's tolerance and so cost someone the
+  puzzle. Each has a button that accepts it as an alias, so it counts next time. Two tests decide
+  a near miss, and both are needed: an absolute edit-distance cap, and a proportional one — two
+  edits is a typo in a long name but a different word in a four-letter one.
+- **The full log** — every round's guesses in order, with a short session fragment.
+
+No names, emails or IP addresses are stored, so this shows *what* was guessed, never *who*
+guessed it. Guesses are free text, so they can contain anything a player types.
+
 ## Guess matching
 
 With no dropdown, guesses have to be forgiving. `server/matching.mjs` folds accents, punctuation
@@ -146,7 +162,8 @@ Public:
 
 Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
 /api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,
-`POST /api/admin/players/:id/silhouette`, `GET /api/admin/players/:id/photo`,
+`POST /api/admin/players/:id/silhouette`, `GET /api/admin/insights[?date=]`, `GET /api/admin/insights/dates`,
+`GET /api/admin/players/:id/photo`,
 `GET|PUT|DELETE /api/admin/schedule[/:date]`.
 
 ## Deploying

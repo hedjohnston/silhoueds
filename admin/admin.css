@@ -196,3 +196,59 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   box-shadow: var(--shadow);
   font-weight: 700;
 }
+
+/* --- guess log --- */
+
+.insight-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.insight-figures div {
+  padding: 10px 14px;
+  background: var(--card-tint);
+  border: 2px solid var(--edge);
+  border-radius: 12px;
+}
+
+.insight-figures strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-figures span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.insight-block { margin-top: 16px; }
+.insight-block h3 { font-size: 15px; margin-bottom: 8px; }
+.insight-block summary { cursor: pointer; font-family: var(--display); font-weight: 700; font-size: 15px; }
+
+.insight-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.insight-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--card-tint);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.insight-log li { font-size: 13px; }
+.insight-log code { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+.insight-log span:nth-child(2) { flex: 1; overflow-wrap: anywhere; }
+.log-won { color: #1f7a3d; font-weight: 800; }
+.log-lost { color: var(--danger); font-weight: 800; }
+
+#insight-date { max-width: 220px; }

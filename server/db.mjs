@@ -217,6 +217,26 @@ export const plays = {
         mode: row.mode ?? 'hard',
       }));
   },
+  /** Every round played on a date, for the admin's guess log. */
+  forDate(date) {
+    return db
+      .prepare('SELECT * FROM plays WHERE date = ? ORDER BY updated_at')
+      .all(date)
+      .map((row) => ({
+        session: row.session_id,
+        guesses: JSON.parse(row.guesses),
+        finished: !!row.finished,
+        won: !!row.won,
+        mode: row.mode ?? 'hard',
+        updatedAt: row.updated_at,
+      }));
+  },
+  /** Dates anyone has actually played, newest first. */
+  playedDates(limit = 60) {
+    return db
+      .prepare('SELECT date, COUNT(*) AS players FROM plays GROUP BY date ORDER BY date DESC LIMIT ?')
+      .all(limit);
+  },
   stats(date) {
     return db
       .prepare(

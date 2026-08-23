@@ -8,7 +8,7 @@ const dom = Object.fromEntries(
     'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
-    'storage-alarm',
+    'storage-alarm', 'insights', 'insight-date',
   ].map((id) => [id, el(id)]),
 );
 
@@ -205,6 +205,7 @@ async function refresh() {
   hintLabels = data.hintLabels;
   renderPlayers();
   await refreshSchedule();
+  await refreshInsightDates().catch(() => {});
 }
 
 async function refreshSchedule() {
@@ -256,6 +257,144 @@ function openImagePicker(player) {
     }
   };
   picker.click();
+}
+
+// --- guess log -----------------------------------------------------------
+
+function statRow(label, value) {
+  const cell = document.createElement('div');
+  const number = document.createElement('strong');
+  number.textContent = String(value);
+  const name = document.createElement('span');
+  name.textContent = label;
+  cell.append(number, name);
+  return cell;
+}
+
+function guessList(title, items, render) {
+  const block = document.createElement('div');
+  block.className = 'insight-block';
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  block.append(heading);
+
+  if (items.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint-text';
+    empty.textContent = 'Nothing yet.';
+    block.append(empty);
+    return block;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'insight-list';
+  for (const item of items) list.append(render(item));
+  block.append(list);
+  return block;
+}
+
+async function renderInsights(date) {
+  const data = await api(`/api/admin/insights${date ? `?date=${date}` : ''}`);
+  dom.insights.innerHTML = '';
+
+  const { summary } = data;
+  const figures = document.createElement('div');
+  figures.className = 'insight-figures';
+  figures.append(
+    statRow('players', summary.players),
+    statRow('solved', `${summary.solved} (${summary.solveRate}%)`),
+    statRow('avg guesses', summary.averageGuesses),
+    statRow('easy / hard', `${summary.modes.easy ?? 0} / ${summary.modes.hard ?? 0}`),
+  );
+  dom.insights.append(figures);
+
+  if (summary.players === 0) {
+    const none = document.createElement('p');
+    none.className = 'hint-text';
+    none.textContent = 'Nobody has played this one yet.';
+    dom.insights.append(none);
+    return;
+  }
+
+  // Near-misses first: these are the ones costing people the puzzle unfairly.
+  dom.insights.append(
+    guessList('Near misses — probably should have counted', data.nearMisses, (item) => {
+      const row = document.createElement('li');
+      const label = document.createElement('span');
+      label.textContent = `${item.name} — ${item.count}×`;
+      const add = document.createElement('button');
+      add.className = 'ghost';
+      add.textContent = 'Accept as alias';
+      add.disabled = !data.player;
+      add.onclick = async () => {
+        add.disabled = true;
+        add.textContent = 'Adding…';
+        try {
+          await api(`/api/admin/players/${data.player.id}`, {
+            method: 'PATCH',
+            body: { aliases: [...new Set([...data.player.aliases, item.name.toLowerCase()])] },
+          });
+          await refresh();
+          await renderInsights(dom['insight-date'].value);
+        } catch (error) {
+          alert(error.message);
+        }
+      };
+      row.append(label, add);
+      return row;
+    }),
+  );
+
+  dom.insights.append(
+    guessList('Most common wrong guesses', data.wrongGuesses, (item) => {
+      const row = document.createElement('li');
+      row.textContent = `${item.name} — ${item.count}×`;
+      return row;
+    }),
+  );
+
+  const details = document.createElement('details');
+  details.className = 'insight-block';
+  const toggle = document.createElement('summary');
+  toggle.textContent = `Full log (${data.log.length} rounds)`;
+  details.append(toggle);
+  const list = document.createElement('ul');
+  list.className = 'insight-list insight-log';
+  for (const round of data.log) {
+    const row = document.createElement('li');
+    const who = document.createElement('code');
+    who.textContent = round.session;
+    const what = document.createElement('span');
+    what.textContent = round.guesses.join(' → ') || '(no guesses)';
+    const outcome = document.createElement('span');
+    outcome.className = round.won ? 'log-won' : 'log-lost';
+    outcome.textContent = round.finished ? (round.won ? 'solved' : 'missed') : 'in progress';
+    row.append(who, what, outcome);
+    list.append(row);
+  }
+  details.append(list);
+  dom.insights.append(details);
+}
+
+async function refreshInsightDates() {
+  const { dates } = await api('/api/admin/insights/dates');
+  const chosen = dom['insight-date'].value;
+  dom['insight-date'].innerHTML = '';
+  if (dates.length === 0) {
+    const option = document.createElement('option');
+    option.textContent = 'No plays yet';
+    dom['insight-date'].append(option);
+    dom.insights.innerHTML = '';
+    return;
+  }
+  for (const entry of dates) {
+    const option = document.createElement('option');
+    option.value = entry.date;
+    option.textContent = `${entry.date} — ${entry.players} player${entry.players === 1 ? '' : 's'}`;
+    dom['insight-date'].append(option);
+  }
+  dom['insight-date'].value = dates.some((d) => d.date === chosen) ? chosen : dates[0].date;
+  await renderInsights(dom['insight-date'].value);
 }
 
 // --- tracer --------------------------------------------------------------
