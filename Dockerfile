@@ -14,7 +14,6 @@ RUN npm ci --omit=dev --no-audit --no-fund
 COPY server ./server
 COPY public ./public
 COPY admin ./admin
-COPY tools ./tools
 
 # Where the data lives. Mount a volume here.
 ENV SILHOUEDS_DB=/data/silhoueds.db \
