@@ -297,11 +297,14 @@ async function send(path, body) {
 function shareCaveat() {
   if (!state.won) return "Didn't get it";
 
+  // A skip reveals a hint the same way an ordinary miss does, so these two counts are disjoint
+  // causes of the same hint reveals — summing them equals state.hints.length, never double-counted.
+  const misses = state.guesses.filter((guess) => !guess.correct && !guess.skipped).length;
+  const skips = state.guesses.filter((guess) => guess.skipped).length;
+
   const notes = [];
-  if (state.hints.length > 0) {
-    notes.push(`${state.hints.length} hint${state.hints.length === 1 ? '' : 's'}`);
-  }
-  if (state.guesses.some((guess) => guess.skipped)) notes.push('a skip');
+  if (misses > 0) notes.push(`${misses} hint${misses === 1 ? '' : 's'}`);
+  if (skips > 0) notes.push(skips === 1 ? 'a skip' : `${skips} skips`);
   return notes.length > 0 ? `With ${notes.join(' and ')}` : '';
 }
 
