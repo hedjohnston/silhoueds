@@ -469,11 +469,12 @@ async function copyToClipboard() {
 /**
  * Open the system share sheet where there is one, and fall back to the clipboard.
  *
- * The link goes in `url` rather than inside `text`: passing both would put the address in the
- * message twice on most targets.
+ * The link goes inside `text` rather than in a separate `url` field: several share targets
+ * (WhatsApp among them) use only `url` and silently drop `text` when both are present, so a
+ * separate `url` field meant the score never reached the recipient — only the bare link did.
  */
 async function share() {
-  const payload = { title: 'Silhoueds', text: shareGrid(), url: location.origin };
+  const payload = { title: 'Silhoueds', text: shareText() };
 
   if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
     try {
