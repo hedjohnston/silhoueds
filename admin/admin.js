@@ -4,8 +4,10 @@ const el = (id) => document.getElementById(id);
 const dom = Object.fromEntries(
   [
     'login', 'login-form', 'login-error', 'password', 'app', 'logout',
-    'add-form', 'new-name', 'new-photo', 'new-silhouette', 'add-error', 'players', 'counts',
-    'schedule-form', 'schedule-date', 'schedule-player', 'schedule', 'schedule-error',
+    'add-form', 'new-name', 'new-photo', 'new-silhouette', 'add-error', 'player-filter',
+    'players', 'counts',
+    'schedule-form', 'schedule-date', 'schedule-player-search', 'schedule-player-id',
+    'schedule-player-results', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
     'storage-alarm', 'insights', 'insight-date',
@@ -14,7 +16,10 @@ const dom = Object.fromEntries(
 
 let players = [];
 let hintLabels = [];
+let usedPlayerIds = [];
 let tracingPlayer = null;
+// Which player cards are expanded, so a re-render (e.g. after Save edits) doesn't collapse them.
+const expandedPlayerIds = new Set();
 
 // Sent with every request so dates are resolved where the operator is, not where the server runs.
 const timeZone = (() => {
@@ -53,35 +58,49 @@ function statusChip(player) {
   return `<span class="chip chip-draft">Draft${missing ? ` — needs ${missing}` : ''}</span>`;
 }
 
+/** The silhouette thumbnail, shared between the collapsed summary and the expanded card. */
+function buildArt(player, { small = false } = {}) {
+  const art = document.createElement('div');
+  art.className = small ? 'player-art player-art-thumb' : 'player-art';
+  if (player.silhouette_image) {
+    const image = document.createElement('img');
+    image.src = `/api/admin/players/${player.id}/silhouette-image`;
+    image.alt = '';
+    art.append(image);
+  } else if (player.silhouette) {
+    art.innerHTML = player.silhouette;
+  } else {
+    art.innerHTML = '<span class="art-empty">no silhouette</span>';
+  }
+  return art;
+}
+
 function renderPlayers() {
   dom.players.innerHTML = '';
-  for (const player of players) {
-    const card = document.createElement('li');
-    card.className = 'player';
+  const query = dom['player-filter'].value.trim().toLowerCase();
+  const visible = query ? players.filter((p) => p.name.toLowerCase().includes(query)) : players;
 
-    const head = document.createElement('div');
-    head.className = 'player-head';
+  for (const player of visible) {
+    const card = document.createElement('details');
+    card.className = 'player';
+    card.open = expandedPlayerIds.has(player.id);
+    card.addEventListener('toggle', () => {
+      if (card.open) expandedPlayerIds.add(player.id);
+      else expandedPlayerIds.delete(player.id);
+    });
+
+    const summary = document.createElement('summary');
+    const thumb = buildArt(player, { small: true });
     const title = document.createElement('h3');
     title.textContent = player.name;
     const chip = document.createElement('span');
     chip.innerHTML = statusChip(player);
-    head.append(title, chip);
+    summary.append(thumb, title, chip);
 
     const body = document.createElement('div');
     body.className = 'player-body';
 
-    const art = document.createElement('div');
-    art.className = 'player-art';
-    if (player.silhouette_image) {
-      const image = document.createElement('img');
-      image.src = `/api/admin/players/${player.id}/silhouette-image`;
-      image.alt = '';
-      art.append(image);
-    } else if (player.silhouette) {
-      art.innerHTML = player.silhouette;
-    } else {
-      art.innerHTML = '<span class="art-empty">no silhouette</span>';
-    }
+    const art = buildArt(player);
 
     const details = document.createElement('div');
     details.className = 'player-details';
@@ -173,20 +192,70 @@ function renderPlayers() {
     actions.append(replace, trace, save, publish, remove);
     details.append(hints, aliasLabel, actions);
     body.append(art, details);
-    card.append(head, body);
+    card.append(summary, body);
     dom.players.append(card);
   }
 
   const live = players.filter((p) => p.status === 'ready').length;
   dom.counts.textContent = `${live} live · ${players.length - live} draft`;
+}
 
-  dom['schedule-player'].innerHTML = '';
-  for (const player of players.filter((p) => p.status === 'ready')) {
-    const option = document.createElement('option');
-    option.value = player.id;
-    option.textContent = player.name;
-    dom['schedule-player'].append(option);
-  }
+/** Ready players that have never been scheduled — a player is used once, never repeated. */
+function schedulablePlayers() {
+  return players.filter((p) => p.status === 'ready' && !usedPlayerIds.includes(p.id));
+}
+
+/**
+ * Wire up the searchable name picker for the schedule form, replacing a dropdown that won't
+ * scale. Called once — the handlers read `players`/`usedPlayerIds` live on every keystroke, so
+ * nothing needs re-wiring as the data changes.
+ */
+function initSchedulePicker() {
+  const search = dom['schedule-player-search'];
+  const idField = dom['schedule-player-id'];
+  const results = dom['schedule-player-results'];
+
+  // A name typed without picking a row must not carry over a stale selection.
+  search.oninput = () => {
+    idField.value = '';
+    const query = search.value.trim().toLowerCase();
+    const matches = query
+      ? schedulablePlayers().filter((p) => p.name.toLowerCase().includes(query))
+      : schedulablePlayers();
+
+    results.innerHTML = '';
+    if (matches.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'picker-empty';
+      empty.textContent = schedulablePlayers().length === 0
+        ? 'No unused ready players left — publish more, or clear a schedule entry.'
+        : 'No match.';
+      results.append(empty);
+    } else {
+      for (const player of matches) {
+        const row = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = player.name;
+        button.onclick = () => {
+          idField.value = player.id;
+          search.value = player.name;
+          results.hidden = true;
+        };
+        row.append(button);
+        results.append(row);
+      }
+    }
+    results.hidden = false;
+  };
+
+  search.onfocus = () => {
+    if (search.value.trim()) search.oninput();
+  };
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.picker')) results.hidden = true;
+  });
 }
 
 async function refresh() {
@@ -199,7 +268,8 @@ async function refresh() {
 }
 
 async function refreshSchedule() {
-  const { upcoming, today, stats } = await api('/api/admin/schedule');
+  const { upcoming, today, stats, usedPlayerIds: used } = await api('/api/admin/schedule');
+  usedPlayerIds = used;
   dom.schedule.innerHTML = '';
   if (upcoming.length === 0) {
     dom.schedule.innerHTML = '<li class="empty">Nothing scheduled — days auto-fill from live players.</li>';
@@ -483,11 +553,19 @@ dom['add-form'].onsubmit = async (event) => {
 dom['schedule-form'].onsubmit = async (event) => {
   event.preventDefault();
   showError(dom['schedule-error'], '');
+  const playerId = dom['schedule-player-id'].value;
+  if (!playerId) {
+    showError(dom['schedule-error'], 'Pick a player from the list first.');
+    return;
+  }
   try {
     await api(`/api/admin/schedule/${dom['schedule-date'].value}`, {
       method: 'PUT',
-      body: { playerId: Number(dom['schedule-player'].value) },
+      body: { playerId: Number(playerId) },
     });
+    dom['schedule-player-search'].value = '';
+    dom['schedule-player-id'].value = '';
+    dom['schedule-player-results'].hidden = true;
     await refreshSchedule();
   } catch (error) {
     showError(dom['schedule-error'], error);
@@ -510,6 +588,8 @@ async function start() {
       `Data is not on a persistent disk (${storage.directory}). Anything you add here will be ` +
       `lost when the server restarts. Check that the volume is still mounted before adding players.`;
   }
+  initSchedulePicker();
+  dom['player-filter'].oninput = renderPlayers;
   await refresh();
 }
 

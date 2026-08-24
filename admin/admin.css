@@ -95,11 +95,19 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
 /* --- player cards --- */
 
-.players, .schedule, .hint-rows { list-style: none; margin: 0; padding: 0; }
-.players { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.player-filter { width: 100%; margin-top: 12px; }
 
-.player { border: 2px solid var(--edge); border-radius: 14px; padding: 14px; background: #fff; }
-.player-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.players, .schedule, .hint-rows { list-style: none; margin: 0; padding: 0; }
+.players { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+
+.player { border: 2px solid var(--edge); border-radius: 14px; padding: 10px 14px; background: #fff; }
+.player[open] { padding-bottom: 14px; }
+
+.player summary {
+  display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; padding: 4px 0;
+}
+.player summary::-webkit-details-marker { display: none; }
+.player summary h3 { flex: 1; }
 
 .chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 2px solid var(--edge); white-space: nowrap; background: #fff; }
 .chip-ready { background: var(--ok); }
@@ -121,6 +129,10 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .player-art svg, .player-art img { height: 145px; width: auto; max-width: 100%; object-fit: contain; }
 .art-empty { color: var(--muted); font-size: 12px; }
 
+.player-art-thumb { flex: 0 0 36px; height: 36px; border-radius: 8px; }
+.player-art-thumb svg, .player-art-thumb img { height: 30px; }
+.player-art-thumb .art-empty { font-size: 8px; text-align: center; }
+
 .player-details { flex: 1 1 340px; display: flex; flex-direction: column; gap: 10px; }
 
 .hint-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -136,6 +148,22 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .schedule { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .schedule li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card-tint); border-radius: 10px; }
 .schedule .empty { color: var(--muted); font-size: 14px; justify-content: flex-start; }
+
+.picker { position: relative; }
+.picker-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 10;
+  max-height: 220px; overflow-y: auto;
+  background: #fff; border: 2px solid var(--edge); border-radius: 10px;
+  box-shadow: var(--shadow);
+  list-style: none; margin: 0; padding: 4px;
+}
+.picker-results li { padding: 0; }
+.picker-results button {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border: none; border-radius: 8px;
+  background: none; font: inherit; cursor: pointer;
+}
+.picker-results button:hover, .picker-results button:focus-visible { background: var(--card-tint); }
+.picker-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
 
 /* --- tracer --- */
 

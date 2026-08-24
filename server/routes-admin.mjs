@@ -198,7 +198,12 @@ adminRouter.get('/players/:id/silhouette-image', (req, res) => {
 adminRouter.get('/schedule', (req, res) => {
   // The operator's own day, not the server's.
   const today = todayKey(new Date(), zoneOf(req));
-  res.json({ today, upcoming: schedule.upcoming(today), stats: plays.stats(today) });
+  res.json({
+    today,
+    upcoming: schedule.upcoming(today),
+    stats: plays.stats(today),
+    usedPlayerIds: schedule.allScheduledPlayerIds(),
+  });
 });
 
 adminRouter.put('/schedule/:date', (req, res) => {

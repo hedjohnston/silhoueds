@@ -62,7 +62,8 @@
         <h2>Players</h2>
         <p class="counts" id="counts"></p>
       </div>
-      <ul class="players" id="players"></ul>
+      <input class="player-filter" id="player-filter" type="text" placeholder="Filter players…">
+      <div class="players" id="players"></div>
     </section>
 
     <section class="panel">
@@ -84,7 +85,15 @@
       </p>
       <form class="schedule-form" id="schedule-form">
         <input type="date" id="schedule-date" required>
-        <select id="schedule-player" required></select>
+        <div class="picker">
+          <input
+            type="text"
+            id="schedule-player-search"
+            placeholder="Type a player's name…"
+            autocomplete="off">
+          <input type="hidden" id="schedule-player-id">
+          <ul class="picker-results" id="schedule-player-results" hidden></ul>
+        </div>
         <button class="primary" type="submit">Schedule</button>
       </form>
       <ul class="schedule" id="schedule"></ul>

@@ -183,6 +183,13 @@ export const schedule = {
       .all(since)
       .map((r) => r.player_id);
   },
+  /** Every player ever scheduled, any date — the picker excludes these; a player is used once. */
+  allScheduledPlayerIds() {
+    return db
+      .prepare('SELECT DISTINCT player_id FROM schedule')
+      .all()
+      .map((r) => r.player_id);
+  },
 };
 
 export const plays = {
