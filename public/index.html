@@ -61,9 +61,12 @@
 
     <div class="hint-panel" id="hints" aria-live="polite" aria-label="Hints"></div>
 
-    <ol class="history" id="guess-history" aria-label="Your guesses"></ol>
-
     <div class="compose-dock">
+      <!-- One dot per guess the round allows, filling up as they are spent. It is the transcript
+           and the counter in one, which is why it sits in the dock rather than in the scrolling
+           middle: six full-width pills said less than this does, and pushed everything apart. -->
+      <ol class="pips" id="guess-history" aria-label="Your guesses"></ol>
+
       <p class="guesses-left" id="guesses-left" aria-live="polite"></p>
 
       <p class="notice" id="notice" role="status"></p>

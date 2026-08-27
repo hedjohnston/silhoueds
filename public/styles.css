@@ -217,7 +217,7 @@ body[data-round='live'] .compose-dock {
 
 /* --- hints --- */
 
-.history, .hint-rows { list-style: none; margin: 0; padding: 0; }
+.pips, .hint-rows { list-style: none; margin: 0; padding: 0; }
 
 /* Revealed hints get the same panel treatment as the stage and the result box, so they read as
    part of the same object rather than loose text. */
@@ -319,32 +319,71 @@ body[data-round='live'] .compose-dock {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- guesses --- */
+/* --- guesses ---------------------------------------------------------------
 
-.history { display: flex; flex-direction: column; gap: 8px; }
+   Six dots rather than six full-width pills. The pills were the tallest thing on the page and the
+   least informative — a stack of "Skipped, Skipped, Skipped" saying only what one row of dots says
+   at a glance — and every guess made them taller. The dot carries how the guess went; the word
+   itself is one tap away, on the line below, where it costs no height at all. */
 
-.guess {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: var(--red);
+.pips { display: flex; justify-content: center; gap: 10px; }
+
+/* Every slot is the same box whether or not it has been spent — a spent one holds a button and an
+   unspent one holds a bare dot, and without a fixed slot the two sit at different heights and the
+   row reads as crooked. */
+.pip-slot {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+}
+
+/* The dot is small; the thing you tap is not. A 40px target around an 18px dot keeps this
+   comfortable on a phone without six dots taking a row's worth of height. */
+.pip {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* The base button carries the hard offset shadow every other control wants; on a round dot it
+     reads as a crescent stuck to the side of it. The dot draws its own weight with a border. */
+  box-shadow: none;
+}
+
+/* Nor the press travel: the dot answers a tap by growing, and a 2px jog on top of that only makes
+   the row look loose. */
+.pip:active:not(:disabled) { transform: none; box-shadow: none; }
+
+.pip-dot {
+  width: 18px;
+  height: 18px;
   border: 3px solid var(--line);
   border-radius: 999px;
-  font-weight: 600;
+  background: #fff;
+  transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
-.guess::before {
-  content: "✕";
-  font-weight: 800;
-  font-size: 13px;
+.pip-wrong .pip-dot { background: var(--red); }
+.pip-correct .pip-dot { background: var(--green); }
+.pip-skipped .pip-dot { background: var(--grey); }
+
+/* Not yet spent: hollow, and drawn in the muted line so the spent ones read as the filled ones. */
+.pip-empty { border-color: var(--grey); background: transparent; }
+
+/* Held open. The ring is the offset shadow the rest of the page uses, squared up into a halo so
+   it reads as the same family of object. */
+.pip[aria-pressed='true'] .pip-dot {
+  transform: scale(1.3);
+  box-shadow: 0 0 0 3px var(--ground), 0 0 0 6px var(--line);
 }
 
-.guess-correct { background: var(--green); }
-.guess-correct::before { content: "✓"; }
-
-.guess.guess-skipped { background: var(--grey-light); color: var(--muted); }
-.guess.guess-skipped::before { content: "→"; }
+.pip:focus-visible { outline: 3px solid var(--line); outline-offset: -4px; }
 
 .guesses-left {
   margin: 0;
@@ -354,6 +393,15 @@ body[data-round='live'] .compose-dock {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Holding a guess open rather than counting down. Same line, but the guess is a name the player
+   typed, so it keeps their capitalisation and reads as ink rather than as a label. */
+.guesses-left-open {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+  color: var(--ink);
 }
 
 /* No reserved height: an empty notice would leave a dead band above the input. */

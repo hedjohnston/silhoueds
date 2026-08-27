@@ -277,31 +277,100 @@ function renderHints() {
   dom.hints.append(card);
 }
 
+/**
+ * Which guess the player has tapped open, by index, or null for none.
+ *
+ * The dots carry how a guess went; the word they were actually typing is one tap away rather than
+ * a row of its own. Cleared whenever a new guess lands, so the line underneath goes back to
+ * counting down rather than holding an old answer open.
+ */
+let openGuess = null;
+
+const guessLabel = (guess) => (guess.skipped ? 'Skipped' : guess.name);
+
+const guessOutcome = (guess) =>
+  guess.correct ? 'correct' : guess.skipped ? 'skipped' : 'wrong';
+
+/** One dot per guess the round allows: spent ones coloured by outcome, the rest still empty. */
 function renderHistory() {
   dom.history.innerHTML = '';
-  for (const guess of state.guesses) {
-    const row = document.createElement('li');
-    row.className = guess.correct
-      ? 'guess guess-correct'
-      : guess.skipped
-        ? 'guess guess-skipped'
-        : 'guess guess-wrong';
-    row.textContent = guess.skipped ? 'Skipped' : guess.name;
-    dom.history.append(row);
+
+  for (let slot = 0; slot < state.maxGuesses; slot++) {
+    const guess = state.guesses[slot];
+    const item = document.createElement('li');
+
+    if (!guess) {
+      // Nothing to announce and nothing to tap: the count is already spoken by the line below,
+      // so an empty slot is decoration rather than something to land on.
+      item.className = 'pip-slot';
+      item.setAttribute('aria-hidden', 'true');
+      item.innerHTML = '<span class="pip-dot pip-empty"></span>';
+      dom.history.append(item);
+      continue;
+    }
+
+    const outcome = guessOutcome(guess);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `pip pip-${outcome}`;
+    // The guess is in the accessible name, so nothing has to be tapped to hear what it was. A skip
+    // has no name to read, and "Skipped — skipped" is the outcome twice over.
+    button.setAttribute(
+      'aria-label',
+      guess.skipped ? `Guess ${slot + 1}: skipped` : `Guess ${slot + 1}: ${guess.name} — ${outcome}`,
+    );
+    button.setAttribute('aria-pressed', String(openGuess === slot));
+    button.innerHTML = '<span class="pip-dot"></span>';
+    button.onclick = () => {
+      openGuess = openGuess === slot ? null : slot;
+      renderHistory();
+      renderCaption();
+    };
+
+    item.className = 'pip-slot';
+    item.append(button);
+    dom.history.append(item);
   }
 }
+
+/**
+ * The line under the dots: the guess being held open, or how many are left.
+ *
+ * One line doing both jobs rather than two stacked, since they are never both wanted — and it
+ * keeps the dock a fixed height whichever is showing.
+ */
+function renderCaption() {
+  const open = openGuess === null ? null : state.guesses[openGuess];
+  const text = open
+    ? guessLabel(open)
+    : state.finished
+      ? ''
+      : `${state.guessesLeft} ${state.guessesLeft === 1 ? 'guess' : 'guesses'} left`;
+
+  dom.guessesLeft.textContent = text;
+  dom.guessesLeft.classList.toggle('guesses-left-open', Boolean(open));
+  dom.guessesLeft.hidden = text === '';
+}
+
+// How many guesses were on screen last time, so a new one can close whatever dot was being held
+// open without a re-render for any other reason (a mode switch, a reload) doing the same.
+let shownGuesses = 0;
 
 function render() {
   renderCategories();
   renderModes();
   renderSilhouette();
   renderHints();
-  renderHistory();
 
-  dom.guessesLeft.textContent =
-    `${state.guessesLeft} ${state.guessesLeft === 1 ? 'guess' : 'guesses'} left`;
-  // Once the round is over these reserve empty space above the result, so drop them.
-  dom.guessesLeft.hidden = state.finished;
+  if (state.guesses.length !== shownGuesses) {
+    openGuess = null;
+    shownGuesses = state.guesses.length;
+  }
+
+  renderHistory();
+  renderCaption();
+
+  // Once the round is over this reserves empty space above the result, so drop it.
   dom.notice.hidden = state.finished;
 
   dom.form.hidden = state.finished;
