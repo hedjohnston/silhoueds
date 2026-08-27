@@ -189,15 +189,17 @@ function nextDay(date) {
 /**
  * Hints earned so far — one per wrong guess or skip in hard mode. Easy mode shows the whole
  * ladder from the start instead: the photo is already doing the progressive reveal there, so
- * gating the text hints too would just be hiding help the round doesn't need hidden.
+ * gating the text hints too would just be hiding help the round doesn't need hidden. Once the
+ * round is over, hidden hints have nothing left to protect — a win on the second guess should
+ * still show what the other four would have given away, not leave the panel looking unfinished.
  *
  * `playableHints` rather than the stored order: players saved before the ladder changed still hold
- * the old sequence, the admin allows hand editing, and a rung the player's category has no use for
+ * the old sequence, the admin allows hand editing, and a category the player's game has no use for
  * (the league of a Premier League player) is dropped rather than revealed.
  */
-function revealedHints(player, guesses, easy) {
+function revealedHints(player, guesses, easy, finished) {
   const ordered = playableHints(player);
-  if (easy) return ordered;
+  if (easy || finished) return ordered;
   const misses = guesses.filter((g) => !g.correct).length;
   return ordered.slice(0, Math.min(misses, ordered.length));
 }
@@ -231,7 +233,7 @@ export function publicState(player, play) {
     silhouette: player.silhouette_image ? null : player.silhouette,
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
-    hints: revealedHints(player, guesses, easy),
+    hints: revealedHints(player, guesses, easy, finished),
     // How many exist in total, so the panel can show how much help is left.
     hintsTotal: playableHints(player).length,
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),

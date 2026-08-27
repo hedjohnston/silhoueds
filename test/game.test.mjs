@@ -187,6 +187,29 @@ test('hard mode never releases more hints than exist', () => {
   assert.equal(publicState(player, { date: '2026-08-27', guesses, mode: 'hard' }).hints.length, HINTS.length);
 });
 
+test('a finished round shows every hint, even one solved on the very first guess', () => {
+  // A win this fast earned nothing under the usual "one hint per miss" rule — but the round is
+  // over, so there is nothing left to gate: the panel should show what the other hints would have
+  // given away, not sit there looking like the puzzle had no hints at all.
+  const player = { name: 'X', hints: HINTS, silhouette: '<svg/>' };
+  const state = publicState(player, {
+    date: '2026-08-27', guesses: [guess('X', true)], mode: 'hard', finished: true, won: true,
+  });
+  assert.deepEqual(state.hints.map((h) => h.label), HINTS.map((h) => h.label));
+});
+
+test('a finished round shows every hint after a loss too, not just the ones the misses earned', () => {
+  // A skip earns no answer but still counts as a miss, so a player can lose with fewer text hints
+  // shown than exist — a round finished by skips should still hand over the whole ladder.
+  const player = { name: 'X', hints: HINTS, silhouette: '<svg/>' };
+  const guesses = [guess('wrong')];
+  const unfinished = publicState(player, { date: '2026-08-27', guesses, mode: 'hard', finished: false });
+  const finished = publicState(player, { date: '2026-08-27', guesses, mode: 'hard', finished: true, won: false });
+
+  assert.equal(unfinished.hints.length, 1);
+  assert.deepEqual(finished.hints.map((h) => h.label), HINTS.map((h) => h.label));
+});
+
 test('easy mode shows the whole ladder from the first moment', () => {
   const player = { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
   const state = publicState(player, { date: '2026-08-27', guesses: [], mode: 'easy' });

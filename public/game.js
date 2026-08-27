@@ -307,8 +307,10 @@ function renderHints() {
 
   state.hints.forEach((hint, index) => {
     const row = document.createElement('li');
-    // The newest hint is the new information, so it carries a tint.
-    row.className = index === state.hints.length - 1 ? 'hint hint-latest' : 'hint';
+    // The newest hint is the new information, so it carries a tint — but once the round is over
+    // every hint arrived at once, so none of them is "new" and the tint would be arbitrary.
+    row.className =
+      !state.finished && index === state.hints.length - 1 ? 'hint hint-latest' : 'hint';
 
     const badge = document.createElement('span');
     badge.className = 'hint-index';
