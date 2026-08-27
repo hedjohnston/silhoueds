@@ -50,34 +50,41 @@
     </div>
     <p class="mode-note" id="mode-note"></p>
 
-    <div class="stage">
-      <div class="silhouette" id="silhouette" role="img" aria-label="Today's silhouette"></div>
+    <!-- The art and the input are the two things you need at the same time; the hints and the
+         transcript between them are reference that grows by a row per guess. Each is docked so
+         that middle scrolls under them instead of shouldering them off the screen. -->
+    <div class="stage-dock">
+      <div class="stage">
+        <div class="silhouette" id="silhouette" role="img" aria-label="Today's silhouette"></div>
+      </div>
     </div>
 
     <div class="hint-panel" id="hints" aria-live="polite" aria-label="Hints"></div>
 
     <ol class="history" id="guess-history" aria-label="Your guesses"></ol>
 
-    <p class="guesses-left" id="guesses-left" aria-live="polite"></p>
+    <div class="compose-dock">
+      <p class="guesses-left" id="guesses-left" aria-live="polite"></p>
 
-    <p class="notice" id="notice" role="status"></p>
+      <p class="notice" id="notice" role="status"></p>
 
-    <form class="guess-form" id="guess-form" autocomplete="off">
-      <div class="input-wrap">
-        <label class="visually-hidden" for="guess-input">Your guess</label>
-        <input
-          id="guess-input"
-          type="text"
-          placeholder="Type a player's name…"
-          autocomplete="off"
-          autocapitalize="words"
-          spellcheck="false"
-          enterkeyhint="go">
-      </div>
-      <button class="primary" type="submit">Guess</button>
-    </form>
+      <form class="guess-form" id="guess-form" autocomplete="off">
+        <div class="input-wrap">
+          <label class="visually-hidden" for="guess-input">Your guess</label>
+          <input
+            id="guess-input"
+            type="text"
+            placeholder="Type a player's name…"
+            autocomplete="off"
+            autocapitalize="words"
+            spellcheck="false"
+            enterkeyhint="go">
+        </div>
+        <button class="primary" type="submit">Guess</button>
+      </form>
 
-    <button class="ghost" id="skip-button" type="button">Skip — reveal a hint</button>
+      <button class="ghost" id="skip-button" type="button">Skip — reveal a hint</button>
+    </div>
 
     <section class="result" id="result" hidden aria-live="polite">
       <h2 class="result-title" id="result-title"></h2>

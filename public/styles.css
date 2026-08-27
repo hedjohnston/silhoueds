@@ -122,6 +122,61 @@ body {
 
 .mode-note:empty { display: none; }
 
+/* --- docking ---------------------------------------------------------------
+
+   A round is three things stacked: the art, a middle that grows (hints gain a row per miss, the
+   transcript gains one per guess), and the input. Left in normal flow the middle wins — by the
+   sixth guess the art has been pushed off the top of a phone and the input has walked down past
+   the fold, so the two halves of the puzzle you actually need are never on screen together.
+
+   So both ends dock and the middle scrolls between them. The docks carry the page's own
+   background because content passes underneath, and they extend past the panels they hold to
+   cover the hard offset shadow, which would otherwise show a sliver of moving text.
+
+   Only while the round is live: `data-round="over"` releases both, because the reveal and the
+   stats want the full screen and there is nothing left to type. And only where there is room —
+   under about 600px of viewport the two docks would leave no middle to scroll, so short screens
+   keep the plain document. */
+
+body[data-round='live'] .stage-dock,
+body[data-round='live'] .compose-dock {
+  position: static;
+}
+
+@media (min-height: 600px) {
+  body[data-round='live'] .stage-dock {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    /* Pulls up into the card's gap so the dock's own background starts at the top of the
+       viewport rather than leaving a strip the hints can be seen sliding through. */
+    margin-top: calc(-1 * clamp(10px, 3vw, 32px));
+    padding-top: clamp(10px, 3vw, 32px);
+    /* Clears the 3px offset shadow and then some, so a guess pill passing underneath disappears
+       against the ground rather than being sliced by the stage's own border. */
+    padding-bottom: 14px;
+    background: var(--ground);
+  }
+
+  body[data-round='live'] .compose-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-bottom: calc(-1 * clamp(10px, 3vw, 32px));
+    padding-bottom: clamp(10px, 3vw, 32px);
+    padding-top: 10px;
+    background: var(--ground);
+  }
+}
+
+/* The dock is a plain wrapper the rest of the time, so its children keep the spacing they had
+   as direct children of the card. */
+.compose-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* --- the puzzle --- */
 
 .stage {

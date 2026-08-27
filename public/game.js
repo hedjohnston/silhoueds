@@ -308,6 +308,10 @@ function render() {
   dom.skip.hidden = state.finished;
   dom.result.hidden = !state.finished;
 
+  // Drives the docking in CSS. Only a live round pins the art and the input: once it is over the
+  // result and the stats want the whole screen, and there is nothing left to type into.
+  document.body.dataset.round = state.finished ? 'over' : 'live';
+
   if (state.finished) {
     dom.resultTitle.textContent = state.won ? 'Got it!' : 'Out of guesses';
     dom.resultName.textContent = state.answer ?? '';
