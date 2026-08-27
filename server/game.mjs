@@ -153,23 +153,26 @@ function nextDay(date) {
 }
 
 /**
- * Hints earned so far — one per wrong guess or skip.
+ * Hints earned so far — one per wrong guess or skip in hard mode. Easy mode shows the whole
+ * ladder from the start instead: the photo is already doing the progressive reveal there, so
+ * gating the text hints too would just be hiding help the round doesn't need hidden.
  *
  * Sorted into ladder order rather than trusting the stored order: players saved before the ladder
  * changed still hold the old sequence, and the admin allows hand editing.
  */
-function revealedHints(player, guesses) {
-  const misses = guesses.filter((g) => !g.correct).length;
+function revealedHints(player, guesses, easy) {
   const ordered = inLadderOrder(player.hints);
+  if (easy) return ordered;
+  const misses = guesses.filter((g) => !g.correct).length;
   return ordered.slice(0, Math.min(misses, ordered.length));
 }
 
-/** How blurred the photo should be, given how far through the hints the player is. */
+/** How blurred the photo should be, given how many guesses (or skips) have been spent. */
 function blurFor(player, guesses, finished) {
   if (finished) return 0;
-  const revealed = revealedHints(player, guesses).length;
+  const misses = guesses.filter((g) => !g.correct).length;
   const rungs = (player.hints.length || 1) + 1;
-  return Math.round(START_BLUR * (1 - revealed / rungs));
+  return Math.round(START_BLUR * (1 - Math.min(misses, rungs) / rungs));
 }
 
 /** What the browser is allowed to know about the current round. */
@@ -193,7 +196,7 @@ export function publicState(player, play) {
     silhouette: player.silhouette_image ? null : player.silhouette,
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
-    hints: revealedHints(player, guesses),
+    hints: revealedHints(player, guesses, easy),
     // How many exist in total, so the panel can show how much help is left.
     hintsTotal: player.hints.length,
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),
