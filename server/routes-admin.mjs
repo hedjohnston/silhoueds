@@ -3,7 +3,6 @@
 import express from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 import { players, schedule, plays, CATEGORIES } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
@@ -12,29 +11,58 @@ import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
 import { closeness } from './matching.mjs';
+import { UPLOAD_DIR, sendUpload, discard } from './uploads.mjs';
 
 /** Which of the two daily games this request concerns. */
 function categoryOf(req) {
   return normalizeCategory(req.query?.category ?? req.body?.category);
 }
 
-const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+/**
+ * The only types we accept, and the extension each is stored under.
+ *
+ * The extension comes from this map rather than from the uploaded filename. `originalname` is
+ * attacker-controlled, and the stored file is later served back by `res.sendFile`, which picks
+ * its Content-Type from the extension — so a file named `x.html` would be served as HTML from
+ * our own origin, reachable unauthenticated through /api/puzzle/silhouette. Deriving the
+ * extension from the type we validated keeps that door shut.
+ */
+const ALLOWED_IMAGES = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+  ['image/avif', '.avif'],
+]);
 
-const ALLOWED_IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+/** A 400, not a 500: a wrong file type is the operator's mistake, not the server falling over. */
+function rejectType() {
+  const error = new Error('Photos must be JPEG, PNG, WebP or AVIF.');
+  error.status = 400;
+  return error;
+}
 
 const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
     filename: (req, file, cb) =>
-      cb(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`),
+      cb(null, `${crypto.randomUUID()}${ALLOWED_IMAGES.get(file.mimetype) ?? ''}`),
   }),
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (req, file, cb) =>
-    ALLOWED_IMAGES.has(file.mimetype)
-      ? cb(null, true)
-      : cb(new Error('Photos must be JPEG, PNG, WebP or AVIF.')),
+    ALLOWED_IMAGES.has(file.mimetype) ? cb(null, true) : cb(rejectType()),
 });
+
+/**
+ * Delete whatever multer already wrote for this request.
+ *
+ * Multer streams to disk before the handler runs, so every early return below would otherwise
+ * strand its uploads — up to 12 MB a time on a 1 GB volume, with nothing referencing them.
+ */
+function discardUploads(req) {
+  for (const file of Object.values(req.files ?? {}).flat()) {
+    fs.rmSync(file.path, { force: true });
+  }
+}
 
 const slugify = (name) =>
   name
@@ -59,11 +87,6 @@ function readiness(player) {
   if (!hasArtwork(player)) missing.push('silhouette');
   if (!player.hints?.length) missing.push('hints');
   return missing;
-}
-
-/** Remove an image file that is no longer referenced. */
-function discard(filename) {
-  if (filename) fs.rmSync(path.join(UPLOAD_DIR, filename), { force: true });
 }
 
 export const adminRouter = express.Router();
@@ -107,7 +130,10 @@ const uploads = upload.fields([
 
 adminRouter.post('/players', uploads, async (req, res) => {
   const name = String(req.body?.name ?? '').trim();
-  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  if (!name) {
+    discardUploads(req);
+    return res.status(400).json({ error: 'A name is required.' });
+  }
 
   const silhouetteFile = req.files?.silhouette?.[0]?.filename ?? null;
   const photoFile = req.files?.photo?.[0]?.filename ?? null;
@@ -127,7 +153,10 @@ adminRouter.post('/players', uploads, async (req, res) => {
 // Replace either image on an existing player.
 adminRouter.post('/players/:id/images', uploads, (req, res) => {
   const player = players.get(Number(req.params.id));
-  if (!player) return res.status(404).json({ error: 'No such player' });
+  if (!player) {
+    discardUploads(req);
+    return res.status(404).json({ error: 'No such player' });
+  }
 
   const fields = {};
   const silhouetteFile = req.files?.silhouette?.[0]?.filename;
@@ -145,6 +174,7 @@ adminRouter.post('/players/:id/images', uploads, (req, res) => {
     fields.reveal_image = photoFile;
   }
   if (Object.keys(fields).length === 0) {
+    discardUploads(req);
     return res.status(400).json({ error: 'Choose at least one image.' });
   }
 
@@ -194,15 +224,11 @@ adminRouter.delete('/players/:id', (req, res) => {
 
 // The uploaded images, for review in the admin.
 adminRouter.get('/players/:id/photo', (req, res) => {
-  const player = players.get(Number(req.params.id));
-  if (!player?.photo) return res.status(404).end();
-  res.sendFile(path.resolve(UPLOAD_DIR, player.photo));
+  sendUpload(res, players.get(Number(req.params.id))?.photo);
 });
 
 adminRouter.get('/players/:id/silhouette-image', (req, res) => {
-  const player = players.get(Number(req.params.id));
-  if (!player?.silhouette_image) return res.status(404).end();
-  res.sendFile(path.resolve(UPLOAD_DIR, player.silhouette_image));
+  sendUpload(res, players.get(Number(req.params.id))?.silhouette_image);
 });
 
 adminRouter.get('/schedule', (req, res) => {

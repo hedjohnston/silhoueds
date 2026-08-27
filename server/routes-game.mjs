@@ -1,7 +1,6 @@
 // Public game API. Everything here is safe for an anonymous visitor.
 
 import express from 'express';
-import path from 'node:path';
 import { playSession } from './auth.mjs';
 import { zoneOf } from './request.mjs';
 import {
@@ -9,8 +8,7 @@ import {
   normalizeCategory,
 } from './game.mjs';
 import { schedule, plays } from './db.mjs';
-
-const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
+import { sendUpload } from './uploads.mjs';
 
 /** Which category this request is for — Premier League or International, each its own game. */
 function categoryOf(req) {
@@ -44,8 +42,7 @@ gameRouter.get('/puzzle/silhouette', (req, res) => {
   const date = dateOf(req, category);
   if (!date) return res.status(404).end();
   const round = loadRound(playSession(req, res), date, category);
-  if (!round?.player.silhouette_image) return res.status(404).end();
-  res.sendFile(path.resolve(UPLOAD_DIR, round.player.silhouette_image));
+  sendUpload(res, round?.player.silhouette_image);
 });
 
 // The full photo. Served only once this visitor's round is over, so it cannot be used to
@@ -59,7 +56,7 @@ gameRouter.get('/puzzle/reveal', (req, res) => {
   if (!round?.player.reveal_image) return res.status(404).end();
   // Hard mode keeps the photo back until the round is over; easy mode is the opt-in exception.
   if (!round.play.finished && round.play.mode !== 'easy') return res.status(403).end();
-  res.sendFile(path.resolve(UPLOAD_DIR, round.player.reveal_image));
+  sendUpload(res, round.player.reveal_image);
 });
 
 gameRouter.post('/guess', (req, res) => {
