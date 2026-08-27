@@ -56,11 +56,16 @@ images** to swap either image later.
 
 A Premier League player has no **League** row: every player in that game is in that league, so the
 hint would burn a guess for nothing. **Add hint category** puts something of your own in its place
-— *Trophy cabinet*, *International caps*, whatever fits — and a category invented once is offered
-to every other card. Your own hint leads the ladder — it is written for that one footballer rather
-than drawn from a list they all answer, so it gives least away. Moving a player between games
-redraws their rungs on the spot; a League hint stored before the split is ignored by the game
-immediately, and drops away the next time the card is saved.
+— *Trophy cabinet*, *International caps*, whatever fits. The label is a dropdown of every category
+invented so far, shared by both games, plus **Write a new one…** to name one that isn't there yet.
+Your own hint leads the ladder: it is written for that one footballer rather than drawn from a list
+they all answer, so it gives least away. Moving a player between games redraws their rungs on the
+spot; a League hint stored before the split is ignored by the game immediately, and drops away the
+next time the card is saved.
+
+**Six hints is the cap**, counted off under the rows. Hard mode releases one per wrong guess and
+there are only six guesses, so a seventh could never be reached — the Add button switches off at
+the limit, and the API refuses an over-full save rather than storing hints nothing can reveal.
 
 **Archive** retires a footballer who has had their day: they leave the player list, they stop
 being a candidate for another round, and every day they already ran still plays. **Archive played**

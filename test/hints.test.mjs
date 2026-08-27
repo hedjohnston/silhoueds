@@ -4,7 +4,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HINT_LABELS, hintLabelsFor, inLadderOrder, playableHints } from '../server/hints.mjs';
+import { HINT_LABELS, MAX_HINTS, hintLabelsFor, inLadderOrder, playableHints } from '../server/hints.mjs';
+import { MAX_GUESSES } from '../server/game.mjs';
 
 const labelsOf = (hints) => inLadderOrder(hints).map((h) => h.label);
 
@@ -107,4 +108,11 @@ test('a hint category of your own survives, and reveals first', () => {
 test('a player with no hints or no category is handled without throwing', () => {
   assert.deepEqual(playableHints({ category: 'premier-league' }), []);
   assert.deepEqual(playableHints(null), []);
+});
+
+
+test('the hint cap matches the guess count, so no hint is unreachable', () => {
+  // Hard mode releases one hint per wrong guess. If these drift apart, a player either carries
+  // hints no round can reach or the ladder runs dry before the guesses do.
+  assert.equal(MAX_HINTS, MAX_GUESSES);
 });

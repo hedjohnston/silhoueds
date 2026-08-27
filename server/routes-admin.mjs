@@ -9,7 +9,7 @@ import {
   checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin,
   loginDelay, recordFailedLogin, clearFailedLogins,
 } from './auth.mjs';
-import { HINT_LABELS, hintLabelsFor, playableHints } from './hints.mjs';
+import { HINT_LABELS, MAX_HINTS, hintLabelsFor, playableHints } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
@@ -115,7 +115,10 @@ function hintCatalog() {
   return {
     standard: HINT_LABELS,
     ladders: Object.fromEntries(CATEGORIES.map((category) => [category, hintLabelsFor(category)])),
+    // Shared across both games: a category invented on a Premier League card is offered on a
+    // The Rest one too, and the other way round.
     custom: [...custom].sort(),
+    max: MAX_HINTS,
   };
 }
 
@@ -260,9 +263,17 @@ adminRouter.patch('/players/:id', (req, res) => {
   if (typeof req.body.name === 'string' && req.body.name.trim()) fields.name = req.body.name.trim();
   if (Array.isArray(req.body.aliases)) fields.aliases = req.body.aliases.map(String);
   if (Array.isArray(req.body.hints)) {
-    fields.hints = req.body.hints
+    const hints = req.body.hints
       .filter((h) => h && h.label && h.value)
       .map((h) => ({ label: String(h.label), value: String(h.value) }));
+    // The admin stops at the cap on its own; this is the backstop, and a 400 rather than a quiet
+    // truncation so a caller is told which hints it would have lost.
+    if (hints.length > MAX_HINTS) {
+      return res.status(400).json({
+        error: `A round can only reveal ${MAX_HINTS} hints — that is ${hints.length}.`,
+      });
+    }
+    fields.hints = hints;
     fields.hint_source = 'manual';
   }
   if (typeof req.body.silhouette === 'string') fields.silhouette = req.body.silhouette;

@@ -168,3 +168,33 @@ test('the hint catalog carries a ladder per game, plus the categories invented s
   assert.deepEqual(hints.ladders.international, hints.standard);
   assert.deepEqual(hints.custom, ['Trophy cabinet']);
 });
+
+
+test('the admin refuses a seventh hint rather than storing one nothing can reveal', async () => {
+  const player = players.create({ slug: 'over-full', name: 'Les Ferdinand', category: 'international' });
+  const hint = (n) => ({ label: `Category ${n}`, value: `value ${n}` });
+
+  const refused = await asAdmin(`/api/admin/players/${player.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hints: [1, 2, 3, 4, 5, 6, 7].map(hint) }),
+  });
+  assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /6 hints/);
+  // Refused outright: the seventh does not quietly take the other six down with it.
+  assert.deepEqual(players.get(player.id).hints, []);
+
+  const accepted = await asAdmin(`/api/admin/players/${player.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hints: [1, 2, 3, 4, 5, 6].map(hint) }),
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal((await accepted.json()).player.hints.length, 6);
+});
+
+test('the catalog states the cap, and shares invented categories across both games', async () => {
+  const { hints } = await (await asAdmin('/api/admin/players')).json();
+  assert.equal(hints.max, 6);
+  // One list, whichever game a category was written on.
+  assert.ok(hints.custom.includes('Trophy cabinet'));
+  assert.ok(hints.custom.includes('Category 1'));
+});

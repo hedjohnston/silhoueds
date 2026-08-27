@@ -11,7 +11,7 @@ const dom = Object.fromEntries(
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
     'storage-alarm', 'insights', 'insight-category', 'insight-date',
-    'archive-played', 'custom-hint-labels',
+    'archive-played',
   ].map((id) => [id, el(id)]),
 );
 
@@ -107,31 +107,52 @@ function buildArt(player, { small = false } = {}) {
   return art;
 }
 
+/** The dropdown entry that swaps in a field for naming a category of your own. */
+const WRITE_MY_OWN = '\u0000write-my-own';
+
 /**
- * One editable hint row. A fixed rung of the ladder carries its label; a hint category invented
- * here lets you name it, and drop it again.
+ * One editable hint row. A fixed rung of the ladder carries its label; a hint category of your own
+ * picks one from the list every game shares, or names a new one, and can be dropped again.
  */
-function hintRow({ label, value, fixed }) {
+function hintRow({ label, value, fixed }, onChange = () => {}) {
   const node = document.createElement('li');
   const field = document.createElement('input');
   field.value = value ?? '';
   field.placeholder = '—';
   let dropped = false;
-  let name;
+  let readLabel;
 
   if (fixed) {
-    name = document.createElement('span');
+    const name = document.createElement('span');
     name.className = 'hint-row-label';
     name.textContent = label;
     node.append(name, field);
+    readLabel = () => label;
   } else {
     node.className = 'hint-row-custom';
-    name = document.createElement('input');
-    name.className = 'hint-row-label';
-    name.value = label ?? '';
-    name.placeholder = 'Hint category';
-    // Whatever has been invented on another player, offered rather than retyped exactly.
-    name.setAttribute('list', 'custom-hint-labels');
+
+    const choice = document.createElement('select');
+    choice.className = 'hint-row-label';
+    choice.append(new Option('Choose a category…', ''));
+    // Every category invented so far, whichever game it was written on.
+    for (const known of hintCatalog.custom ?? []) choice.append(new Option(known, known));
+    choice.append(new Option('Write a new one…', WRITE_MY_OWN));
+
+    const typed = document.createElement('input');
+    typed.className = 'hint-row-typed';
+    typed.placeholder = 'Name your category';
+    typed.hidden = true;
+
+    // A label the catalog has not seen is one being written right now, so the row comes back
+    // mid-thought rather than losing what was typed.
+    if (label && ![...choice.options].some((option) => option.value === label)) {
+      choice.value = WRITE_MY_OWN;
+      typed.value = label;
+      typed.hidden = false;
+    } else {
+      choice.value = label ?? '';
+    }
+
     const drop = document.createElement('button');
     drop.type = 'button';
     drop.className = 'ghost danger hint-row-drop';
@@ -140,32 +161,70 @@ function hintRow({ label, value, fixed }) {
     drop.onclick = () => {
       dropped = true;
       node.remove();
+      onChange();
     };
-    node.append(name, field, drop);
+
+    choice.onchange = () => {
+      const writing = choice.value === WRITE_MY_OWN;
+      typed.hidden = !writing;
+      if (writing) typed.focus();
+      onChange();
+    };
+
+    node.append(choice, field, drop, typed);
+    readLabel = () => (choice.value === WRITE_MY_OWN ? typed.value.trim() : choice.value);
+    node.focusLabel = () => choice.focus();
   }
 
   return {
     node,
-    read: () =>
-      dropped ? null : { label: fixed ? label : name.value.trim(), value: field.value.trim() },
+    read: () => (dropped ? null : { label: readLabel(), value: field.value.trim() }),
   };
 }
 
 /**
- * The hint editor for one player: any hint category invented for them, then their category's
- * fixed rungs — the order the game reveals them in.
+ * The hint editor for one player: any hint category of your own, then their category's fixed
+ * rungs — the order the game reveals them in.
  *
  * A rung the category has no use for is simply absent — a Premier League player has no League row,
  * because every player in that game is in that league. A League hint stored before the split is
  * already ignored by the game, and drops away the next time the card is saved.
+ *
+ * The count is capped: hard mode releases one hint per wrong guess, so past six nothing more can
+ * ever be reached. The Add button switches off at the cap rather than letting a save be refused.
  */
 function buildHintEditor(player, chosenCategory) {
   const list = document.createElement('ol');
   list.className = 'hint-rows';
+  const tally = document.createElement('p');
+  tally.className = 'hint-tally';
   let rows = [];
 
+  /** The hints that would actually be saved: named, filled in, and each label only once. */
+  const read = () => {
+    const seen = new Set();
+    const hints = [];
+    for (const row of rows) {
+      const hint = row.read();
+      // A blank value is how a hint is cleared, and a second row named the same is a slip.
+      if (!hint?.label || !hint.value || seen.has(hint.label)) continue;
+      seen.add(hint.label);
+      hints.push(hint);
+    }
+    return hints;
+  };
+
+  const max = hintCatalog.max ?? 6;
+  const retally = () => {
+    const count = read().length;
+    tally.textContent = `${count} of ${max} hints`;
+    tally.classList.toggle('hint-tally-full', count >= max);
+    addCategory.disabled = count >= max;
+    addCategory.title = count >= max ? `Six is the most a round can reveal.` : '';
+  };
+
   const add = (spec) => {
-    const row = hintRow(spec);
+    const row = hintRow(spec, retally);
     rows.push(row);
     list.append(row.node);
     return row;
@@ -181,6 +240,7 @@ function buildHintEditor(player, chosenCategory) {
     }
     const ladder = hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard;
     for (const label of ladder) add({ label, value: values.get(label) ?? '', fixed: true });
+    retally();
   };
 
   /** What is on screen right now, so a redraw doesn't discard half-typed edits. */
@@ -193,37 +253,31 @@ function buildHintEditor(player, chosenCategory) {
     return values;
   };
 
-  draw(new Map(player.hints.map((h) => [h.label, h.value])));
-
   const addCategory = document.createElement('button');
   addCategory.type = 'button';
   addCategory.className = 'ghost add-hint';
   addCategory.textContent = 'Add hint category';
   // A new one belongs at the head of the list, where it will be revealed from.
   addCategory.onclick = () => {
-    const row = hintRow({ label: '', value: '', fixed: false });
+    const row = hintRow({ label: '', value: '', fixed: false }, retally);
     rows.unshift(row);
     list.prepend(row.node);
-    row.node.querySelector('input').focus();
+    row.node.focusLabel();
+    retally();
   };
+
+  // Typing in any value field changes how many hints there are, so the tally follows along.
+  list.addEventListener('input', retally);
+
+  draw(new Map(player.hints.map((h) => [h.label, h.value])));
 
   return {
     list,
+    tally,
     addCategory,
     // Switching a player's category switches ladders, so the rows redraw around what is typed.
     recategorise: () => draw(typed()),
-    read: () => {
-      const seen = new Set();
-      const hints = [];
-      for (const row of rows) {
-        const hint = row.read();
-        // A blank value is how a hint is cleared, and a second row named the same is a slip.
-        if (!hint?.label || !hint.value || seen.has(hint.label)) continue;
-        seen.add(hint.label);
-        hints.push(hint);
-      }
-      return hints;
-    },
+    read,
   };
 }
 
@@ -399,7 +453,10 @@ function renderPlayers() {
     };
 
     actions.append(replace, trace, save, publish, archive, remove);
-    details.append(hintEditor.list, hintEditor.addCategory, aliasLabel, categoryLabelField, actions);
+    details.append(
+      hintEditor.list, hintEditor.tally, hintEditor.addCategory,
+      aliasLabel, categoryLabelField, actions,
+    );
     body.append(art, details);
     card.append(summary, body);
     dom.players.append(card);
@@ -484,16 +541,6 @@ function initSchedulePicker() {
   });
 }
 
-/** The hint categories already invented, offered to every card's label field. */
-function renderCustomHintLabels() {
-  dom['custom-hint-labels'].innerHTML = '';
-  for (const label of hintCatalog.custom ?? []) {
-    const option = document.createElement('option');
-    option.value = label;
-    dom['custom-hint-labels'].append(option);
-  }
-}
-
 /** Clear whatever was typed/picked in the schedule form — used when the category changes. */
 function resetSchedulePicker() {
   dom['schedule-player-search'].value = '';
@@ -506,7 +553,6 @@ async function refresh() {
   players = data.players;
   hintCatalog = data.hints;
   today = data.today;
-  renderCustomHintLabels();
   renderPlayerCategoryFilter();
   renderPlayers();
   await refreshSchedule();

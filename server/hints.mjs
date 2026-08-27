@@ -7,6 +7,17 @@
 export const HINT_LABELS = ['Era', 'Position', 'League', 'Nationality', 'Best known at'];
 
 /**
+ * The most hints one player can carry.
+ *
+ * Hard mode releases one per wrong guess, and there are only MAX_GUESSES of those, so a seventh
+ * could never be reached however the round went. Worse than useless: the panel counts hints off as
+ * "2 of 9", advertising help that does not exist. `game.mjs` owns MAX_GUESSES and already imports
+ * this module, so the number is stated here rather than imported back — a test holds the two
+ * together so they cannot drift apart.
+ */
+export const MAX_HINTS = 6;
+
+/**
  * Rungs a category has no use for.
  *
  * Every player in the Premier League game plays in the Premier League, so that hint tells you
