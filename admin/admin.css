@@ -146,21 +146,27 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
 .player-details { flex: 1 1 340px; display: flex; flex-direction: column; gap: 10px; }
 
-.hint-rows { display: flex; flex-direction: column; gap: 6px; }
-.hint-rows li { display: flex; align-items: center; gap: 10px; }
+.hint-rows { display: flex; flex-direction: column; gap: 6px; counter-reset: hint-slot; }
+/* Numbered, because the slot order is the order the hints are revealed in. */
+.hint-rows li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hint-rows li::before {
+  counter-increment: hint-slot;
+  content: counter(hint-slot);
+  flex: 0 0 18px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
 .hint-row-label { flex: 0 0 108px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .hint-rows input { flex: 1; }
-/* A hint category of your own: the label is chosen rather than fixed, so it reads as a control.
-   min-width: 0 or the select's intrinsic width wins and the label column stops lining up. */
-.hint-row-custom { flex-wrap: wrap; }
-.hint-row-custom select.hint-row-label { flex: 0 0 148px; min-width: 0; font-size: 12px; padding: 6px 8px; text-transform: none; letter-spacing: normal; }
-/* Naming a new one takes the line below, rather than squeezing the value field off the row. */
-.hint-row-typed { flex: 1 1 100%; margin-left: 148px; font-size: 14px; padding: 6px 10px; }
-.hint-row-drop { padding: 4px 9px; line-height: 1; }
+/* min-width: 0 or the select's intrinsic width wins and the label column stops lining up. */
+.hint-rows select.hint-row-label { flex: 0 0 152px; min-width: 0; font-size: 12px; padding: 6px 8px; text-transform: none; letter-spacing: normal; }
+.hint-row-value { flex: 1; min-width: 140px; }
+/* Naming a new one takes the line below, rather than squeezing the answer off the row. */
+.hint-row-typed { flex: 1 1 100%; margin-left: 180px; font-size: 14px; padding: 6px 10px; }
 .hint-tally { color: var(--muted); font-size: 12px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.hint-tally-full { color: var(--ink); font-weight: 700; }
-/* Sits under the rungs as an offer, not as another full-width field. */
-.add-hint { align-self: flex-start; font-size: 13px; padding: 6px 12px; }
+
 
 .alias-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .alias-label input { text-transform: none; letter-spacing: normal; font-size: 15px; }

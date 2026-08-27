@@ -191,6 +191,41 @@ test('the admin refuses a seventh hint rather than storing one nothing can revea
   assert.equal((await accepted.json()).player.hints.length, 6);
 });
 
+test('the same category in two slots is refused rather than revealed twice', async () => {
+  const player = players.create({ slug: 'twice-over', name: 'Andy Cole', category: 'international' });
+  const response = await asAdmin(`/api/admin/players/${player.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      hints: [
+        { label: 'Era', value: 'The 90s' },
+        { label: 'Position', value: 'Striker' },
+        { label: 'Era', value: 'The 80s' },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /only be used once/);
+  assert.deepEqual(players.get(player.id).hints, []);
+});
+
+test('slots are stored in the order they were sent, not sorted', async () => {
+  const player = players.create({ slug: 'own-order', name: 'Teddy Sheringham', category: 'international' });
+  const arranged = [
+    { label: 'Nationality', value: 'English' },
+    { label: 'Era', value: 'The 90s' },
+    { label: 'Position', value: 'Forward' },
+  ];
+
+  const response = await asAdmin(`/api/admin/players/${player.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hints: arranged }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(players.get(player.id).hints, arranged);
+});
+
 test('the catalog states the cap, and shares invented categories across both games', async () => {
   const { hints } = await (await asAdmin('/api/admin/players')).json();
   assert.equal(hints.max, 6);

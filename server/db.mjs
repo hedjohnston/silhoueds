@@ -4,6 +4,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { inLadderOrder } from './hints.mjs';
 
 export const DB_PATH = process.env.SILHOUEDS_DB ?? 'data/silhoueds.db';
 
@@ -153,11 +154,68 @@ if (!hasColumn('plays', 'category')) {
   `);
 }
 
+/**
+ * Freeze the old reveal order into stored order, once.
+ *
+ * Hints used to be sorted into a fixed ladder on the way out, so what was stored bore no relation
+ * to what a player saw — a footballer saved as "Position, Nationality, Era" was revealed as "Era,
+ * Position, Nationality". The admin now arranges six slots and stored order *is* the running
+ * order, so without this every existing player would silently start giving their nationality away
+ * on the first wrong guess.
+ *
+ * `user_version` marks it done, so it runs once and never touches hand-arranged slots afterwards.
+ */
+const HINT_ORDER_VERSION = 1;
+
+function freezeHintOrder() {
+  const rows = db.prepare('SELECT id, hints FROM players').all();
+  const update = db.prepare('UPDATE players SET hints = ? WHERE id = ?');
+  for (const row of rows) {
+    let hints;
+    try {
+      hints = JSON.parse(row.hints);
+    } catch {
+      continue;  // Unreadable JSON is left exactly as found rather than replaced with a guess.
+    }
+    if (!Array.isArray(hints) || hints.length < 2) continue;
+    const ordered = inLadderOrder(hints);
+    if (ordered.some((hint, i) => hint !== hints[i])) update.run(JSON.stringify(ordered), row.id);
+  }
+  db.exec(`PRAGMA user_version = ${HINT_ORDER_VERSION}`);
+}
+
+// Row-by-row JSON work rather than one statement, so it runs inside the transaction by hand.
+if (db.prepare('PRAGMA user_version').get().user_version < HINT_ORDER_VERSION) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    freezeHintOrder();
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw new Error(`Migration "hints.storedOrder" failed and was rolled back: ${error.message}`, { cause: error });
+  }
+}
+
+/**
+ * These two columns hold JSON we wrote ourselves, so they parse — until one doesn't, through a
+ * hand-edited database or a bad disk. Unguarded, a single unreadable row took the whole admin
+ * player list down with a 500, leaving no way in to fix it. Degrading to empty shows the player as
+ * a draft needing hints, which is visible, editable, and recoverable.
+ */
+const readJson = (text, fallback) => {
+  try {
+    const value = JSON.parse(text);
+    return Array.isArray(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const parse = (row) =>
   row && {
     ...row,
-    aliases: JSON.parse(row.aliases),
-    hints: JSON.parse(row.hints),
+    aliases: readJson(row.aliases, []),
+    hints: readJson(row.hints, []),
     status: row.status,
     archived: !!row.archived,
   };

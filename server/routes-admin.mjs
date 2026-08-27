@@ -273,6 +273,15 @@ adminRouter.patch('/players/:id', (req, res) => {
         error: `A round can only reveal ${MAX_HINTS} hints — that is ${hints.length}.`,
       });
     }
+    // Slots are free choice, so the same category can be picked twice. It would reveal one hint
+    // twice and waste a guess doing it; the admin removes a taken category from the other menus,
+    // and this is the backstop behind that.
+    const repeated = hints.map((h) => h.label).filter((label, i, all) => all.indexOf(label) !== i);
+    if (repeated.length > 0) {
+      return res.status(400).json({
+        error: `Each hint category can only be used once — "${repeated[0]}" appears twice.`,
+      });
+    }
     fields.hints = hints;
     fields.hint_source = 'manual';
   }

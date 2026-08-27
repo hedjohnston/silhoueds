@@ -9,12 +9,11 @@ import { MAX_GUESSES } from '../server/game.mjs';
 
 const labelsOf = (hints) => inLadderOrder(hints).map((h) => h.label);
 
-test('the ladder runs vaguest first', () => {
-  // Era barely narrows the field; nationality cuts it to a short list and ends the puzzle early.
+test('the standard categories are the menu every slot offers', () => {
   assert.deepEqual(HINT_LABELS, ['Era', 'Position', 'League', 'Nationality', 'Best known at']);
 });
 
-test('a shuffled set is sorted back into ladder order', () => {
+test('inLadderOrder still sorts, for the one migration that needs the old order', () => {
   const shuffled = [
     { label: 'Best known at', value: 'Newcastle' },
     { label: 'Era', value: 'The 90s' },
@@ -25,22 +24,37 @@ test('a shuffled set is sorted back into ladder order', () => {
   assert.deepEqual(labelsOf(shuffled), HINT_LABELS);
 });
 
-test('a label off the standard ladder leads it rather than being dropped', () => {
-  const hints = [
-    { label: 'Trophy cabinet', value: 'Premier League 1995' },
-    { label: 'Era', value: 'The 90s' },
-  ];
-  assert.deepEqual(labelsOf(hints), ['Trophy cabinet', 'Era']);
+test('the slots are revealed in the order they were arranged, not sorted', () => {
+  // The whole point of free slots: put nationality first and it goes first.
+  const player = {
+    category: 'international',
+    hints: [
+      { label: 'Nationality', value: 'English' },
+      { label: 'Trophy cabinet', value: 'Two titles' },
+      { label: 'Era', value: 'The 90s' },
+    ],
+  };
+  assert.deepEqual(
+    playableHints(player).map((h) => h.label),
+    ['Nationality', 'Trophy cabinet', 'Era'],
+  );
 });
 
-test('several invented categories keep the order they were entered in', () => {
-  // Stable sort: they all rank alike, so the admin's own sequence is the reveal sequence.
-  const hints = [
-    { label: 'Nickname', value: 'Shear' },
-    { label: 'Era', value: 'The 90s' },
-    { label: 'Trophy cabinet', value: 'Two titles' },
-  ];
-  assert.deepEqual(labelsOf(hints), ['Nickname', 'Trophy cabinet', 'Era']);
+test('a category filled into two slots is revealed once, not twice', () => {
+  const player = {
+    category: 'international',
+    hints: [
+      { label: 'Era', value: 'The 90s' },
+      { label: 'Era', value: 'The 80s' },
+      { label: 'Position', value: 'Striker' },
+    ],
+  };
+  assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Position']);
+});
+
+test('nothing past the cap is revealed, however much is stored', () => {
+  const hints = Array.from({ length: 9 }, (_, i) => ({ label: `Category ${i}`, value: `v${i}` }));
+  assert.equal(playableHints({ category: 'international', hints }).length, MAX_HINTS);
 });
 
 test('sorting does not mutate the array it was given', () => {
@@ -78,10 +92,10 @@ test('a Premier League player never plays their stored League hint', () => {
     ],
   };
   // Dropped at reveal time, so a player stored before the split is right without being re-saved.
-  assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Position']);
+  assert.deepEqual(playableHints(player).map((h) => h.label), ['Position', 'Era']);
 });
 
-test('the same hints in the other game keep their League rung, in ladder order', () => {
+test('the same hints in the other game keep their League slot, where it was put', () => {
   const player = {
     category: 'international',
     hints: [
@@ -90,19 +104,20 @@ test('the same hints in the other game keep their League rung, in ladder order',
       { label: 'Era', value: 'The 90s' },
     ],
   };
-  assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Position', 'League']);
+  assert.deepEqual(playableHints(player).map((h) => h.label), ['League', 'Position', 'Era']);
 });
 
-test('a hint category of your own survives, and reveals first', () => {
+test('a hint category of your own sits wherever it was slotted', () => {
   const player = {
     category: 'premier-league',
     hints: [
-      { label: 'Trophy cabinet', value: 'Two league titles' },
-      { label: 'League', value: 'Premier League' },
       { label: 'Era', value: 'The 90s' },
+      { label: 'League', value: 'Premier League' },
+      { label: 'Trophy cabinet', value: 'Two league titles' },
     ],
   };
-  assert.deepEqual(playableHints(player).map((h) => h.label), ['Trophy cabinet', 'Era']);
+  // The League slot is still dropped: that game has no use for it.
+  assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Trophy cabinet']);
 });
 
 test('a player with no hints or no category is handled without throwing', () => {

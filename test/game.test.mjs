@@ -204,11 +204,13 @@ test('easy mode falls back to hard when there is no photo to reveal', () => {
   assert.deepEqual(state.hints, []); // and so it gates the hints again
 });
 
-test('hints come out in ladder order even when stored shuffled', () => {
-  const shuffled = [HINTS[2], HINTS[0], HINTS[1]];
-  const player = { name: 'X', hints: shuffled, reveal_image: 'r.png', silhouette: '<svg/>' };
+test('hints come out in the order the slots were arranged, not sorted', () => {
+  // The admin arranges six slots and stored order is the running order, so a League hint put
+  // first is revealed first. Nothing re-sorts it on the way out.
+  const arranged = [HINTS[2], HINTS[0], HINTS[1]];
+  const player = { name: 'X', hints: arranged, reveal_image: 'r.png', silhouette: '<svg/>' };
   const state = publicState(player, { date: '2026-08-27', guesses: [], mode: 'easy' });
-  assert.deepEqual(state.hints.map((h) => h.label), ['Era', 'Position', 'League']);
+  assert.deepEqual(state.hints.map((h) => h.label), ['League', 'Era', 'Position']);
 });
 
 test('the blur clears as guesses are spent, and is gone once the round ends', () => {

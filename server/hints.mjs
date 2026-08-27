@@ -1,9 +1,8 @@
-// The hint ladder, vaguest first — the sequence hints are revealed in.
+// The standard hint categories, offered in every slot in the admin alongside any invented there.
 //
-// Era sits first because a span of years barely narrows the field, while a position splits it
-// into a handful of groups. League then sits above Nationality for the same reason — a league
-// spans many countries, while a nationality cuts the field to a short list and ends the puzzle
-// too early.
+// This is a menu, not a running order: the admin arranges the six slots, and the order they are
+// left in is the order they are revealed in. It was a fixed ladder until the slots became free
+// choice, which is why `inLadderOrder` below still exists — see the note on it.
 export const HINT_LABELS = ['Era', 'Position', 'League', 'Nationality', 'Best known at'];
 
 /**
@@ -36,16 +35,11 @@ export function hintLabelsFor(category) {
 }
 
 /**
- * Put a player's hints in ladder order.
+ * The order hints used to be revealed in, before the admin got six free slots.
  *
- * Players saved before the order changed still hold their hints in the old sequence, and the
- * admin lets them be edited by hand into any order at all, so the reveal sorts rather than
- * trusting what is stored.
- *
- * A hint category invented in the admin leads the ladder. It is written for one player rather
- * than drawn from a list every footballer answers, so it is the vaguest thing on offer to anyone
- * who doesn't already know the answer — which is exactly what the first rung is for. Several of
- * them keep the order they were entered in, since `sort` is stable and they all rank alike.
+ * This is history, kept for exactly one caller: the migration in `db.mjs` that rewrites stored
+ * hints into this order once, so players saved under the old rules keep revealing what they always
+ * revealed. Stored order is the running order now — nothing else should sort.
  */
 export function inLadderOrder(hints = []) {
   const rank = (hint) => {
@@ -56,13 +50,23 @@ export function inLadderOrder(hints = []) {
 }
 
 /**
- * The hints a player actually plays with: their own, in ladder order, minus any rung their
- * category has no use for.
+ * The hints a player actually plays with, in the order the admin arranged their slots.
  *
- * The filter runs at reveal time rather than on save so a player who changes category — or one
- * stored before their category dropped a rung — is right immediately, without an edit.
+ * Stored order is the running order — the first one is released by the first wrong guess. Three
+ * things are enforced here rather than trusted, because the database holds whatever was written
+ * before today's rules existed: a category this game has no use for is dropped (a Premier League
+ * player's league), a label repeated across two slots counts once, and the list stops at MAX_HINTS
+ * since nothing past that can ever be reached.
  */
 export function playableHints(player) {
   const dropped = irrelevantTo(player?.category);
-  return inLadderOrder((player?.hints ?? []).filter((hint) => !dropped.includes(hint?.label)));
+  const seen = new Set();
+  const hints = [];
+  for (const hint of player?.hints ?? []) {
+    if (!hint?.label || dropped.includes(hint.label) || seen.has(hint.label)) continue;
+    seen.add(hint.label);
+    hints.push(hint);
+    if (hints.length === MAX_HINTS) break;
+  }
+  return hints;
 }

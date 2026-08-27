@@ -111,172 +111,157 @@ function buildArt(player, { small = false } = {}) {
 const WRITE_MY_OWN = '\u0000write-my-own';
 
 /**
- * One editable hint row. A fixed rung of the ladder carries its label; a hint category of your own
- * picks one from the list every game shares, or names a new one, and can be dropped again.
+ * One hint slot: a dropdown naming the category, and the answer to it.
+ *
+ * Every slot offers the same choice — the standard categories this game uses, every category
+ * invented on any card, and one more entry for naming a new one. Nothing is fixed to a position,
+ * so a slot left empty is simply a hint the round doesn't have.
  */
-function hintRow({ label, value, fixed }, onChange = () => {}) {
+function hintSlot({ label, value }, { offered, taken, onChange }) {
   const node = document.createElement('li');
+
+  const choice = document.createElement('select');
+  choice.className = 'hint-row-label';
+
+  const typed = document.createElement('input');
+  typed.className = 'hint-row-typed';
+  typed.placeholder = 'Name your category';
+  typed.hidden = true;
+
   const field = document.createElement('input');
+  field.className = 'hint-row-value';
   field.value = value ?? '';
   field.placeholder = '—';
-  let dropped = false;
-  let readLabel;
 
-  if (fixed) {
-    const name = document.createElement('span');
-    name.className = 'hint-row-label';
-    name.textContent = label;
-    node.append(name, field);
-    readLabel = () => label;
-  } else {
-    node.className = 'hint-row-custom';
+  const readLabel = () => (choice.value === WRITE_MY_OWN ? typed.value.trim() : choice.value);
 
-    const choice = document.createElement('select');
-    choice.className = 'hint-row-label';
+  /**
+   * Rebuild the menu, leaving out categories another slot has already taken.
+   *
+   * Two slots holding the same category would reveal one hint twice and waste a guess, so the
+   * choice is removed rather than policed after the fact. A slot always keeps its own selection,
+   * or picking it would remove it from under itself.
+   */
+  const renderOptions = () => {
+    const chosen = choice.value;
+    const mine = readLabel();
+    const spoken = taken(node);
+    choice.innerHTML = '';
     choice.append(new Option('Choose a category…', ''));
-    // Every category invented so far, whichever game it was written on.
-    for (const known of hintCatalog.custom ?? []) choice.append(new Option(known, known));
-    choice.append(new Option('Write a new one…', WRITE_MY_OWN));
-
-    const typed = document.createElement('input');
-    typed.className = 'hint-row-typed';
-    typed.placeholder = 'Name your category';
-    typed.hidden = true;
-
-    // A label the catalog has not seen is one being written right now, so the row comes back
-    // mid-thought rather than losing what was typed.
-    if (label && ![...choice.options].some((option) => option.value === label)) {
-      choice.value = WRITE_MY_OWN;
-      typed.value = label;
-      typed.hidden = false;
-    } else {
-      choice.value = label ?? '';
+    for (const option of offered()) {
+      if (!spoken.has(option) || option === mine) choice.append(new Option(option, option));
     }
+    choice.append(new Option('Write a new one…', WRITE_MY_OWN));
+    choice.value = chosen;
+  };
 
-    const drop = document.createElement('button');
-    drop.type = 'button';
-    drop.className = 'ghost danger hint-row-drop';
-    drop.textContent = '✕';
-    drop.title = 'Remove this hint category';
-    drop.onclick = () => {
-      dropped = true;
-      node.remove();
-      onChange();
-    };
+  const settle = () => {
+    const writing = choice.value === WRITE_MY_OWN;
+    typed.hidden = !writing;
+    // Naming a category but answering nothing stores nothing, so the pair travels together.
+    node.classList.toggle('hint-row-custom', writing);
+  };
 
-    choice.onchange = () => {
-      const writing = choice.value === WRITE_MY_OWN;
-      typed.hidden = !writing;
-      if (writing) typed.focus();
-      onChange();
-    };
+  choice.onchange = () => {
+    settle();
+    if (choice.value === WRITE_MY_OWN) typed.focus();
+    onChange();
+  };
+  typed.oninput = onChange;
 
-    node.append(choice, field, drop, typed);
-    readLabel = () => (choice.value === WRITE_MY_OWN ? typed.value.trim() : choice.value);
-    node.focusLabel = () => choice.focus();
-  }
+  node.append(choice, field, typed);
 
   return {
     node,
-    read: () => (dropped ? null : { label: readLabel(), value: field.value.trim() }),
+    renderOptions,
+    /** Show the stored label, which may be one being written that no menu lists yet. */
+    fill: () => {
+      renderOptions();
+      if (label && ![...choice.options].some((option) => option.value === label)) {
+        choice.value = WRITE_MY_OWN;
+        typed.value = label;
+      } else {
+        choice.value = label ?? '';
+      }
+      settle();
+    },
+    focus: () => choice.focus(),
+    read: () => ({ label: readLabel(), value: field.value.trim() }),
   };
 }
 
 /**
- * The hint editor for one player: any hint category of your own, then their category's fixed
- * rungs — the order the game reveals them in.
+ * The hint editor: six slots, in the order the game reveals them.
  *
- * A rung the category has no use for is simply absent — a Premier League player has no League row,
- * because every player in that game is in that league. A League hint stored before the split is
- * already ignored by the game, and drops away the next time the card is saved.
- *
- * The count is capped: hard mode releases one hint per wrong guess, so past six nothing more can
- * ever be reached. The Add button switches off at the cap rather than letting a save be refused.
+ * Six because hard mode releases one per wrong guess and there are only six guesses — a seventh
+ * could never be reached. Every slot is free choice, and the order they are left in is the order
+ * they are revealed in, so the first slot is what a player earns for their first wrong guess.
  */
 function buildHintEditor(player, chosenCategory) {
   const list = document.createElement('ol');
   list.className = 'hint-rows';
-  const tally = document.createElement('p');
-  tally.className = 'hint-tally';
-  let rows = [];
 
-  /** The hints that would actually be saved: named, filled in, and each label only once. */
+  const caption = document.createElement('p');
+  caption.className = 'hint-tally';
+  caption.textContent = 'Revealed in this order, one per wrong guess';
+
+  const max = hintCatalog.max ?? 6;
+  let slots = [];
+
+  /** Everything a slot may be set to: this game's standard categories, then the invented ones. */
+  const offered = () => [
+    ...(hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard),
+    ...(hintCatalog.custom ?? []),
+  ];
+
+  const taken = (self) =>
+    new Set(
+      slots
+        .filter((slot) => slot.node !== self)
+        .map((slot) => slot.read().label)
+        .filter(Boolean),
+    );
+
+  // One slot changing frees or spends a category for all the others, so every menu is rebuilt.
+  const onChange = () => {
+    for (const slot of slots) slot.renderOptions();
+  };
+
   const read = () => {
-    const seen = new Set();
     const hints = [];
-    for (const row of rows) {
-      const hint = row.read();
-      // A blank value is how a hint is cleared, and a second row named the same is a slip.
-      if (!hint?.label || !hint.value || seen.has(hint.label)) continue;
-      seen.add(hint.label);
-      hints.push(hint);
+    for (const slot of slots) {
+      const hint = slot.read();
+      if (hint.label && hint.value) hints.push(hint);
     }
     return hints;
   };
 
-  const max = hintCatalog.max ?? 6;
-  const retally = () => {
-    const count = read().length;
-    tally.textContent = `${count} of ${max} hints`;
-    tally.classList.toggle('hint-tally-full', count >= max);
-    addCategory.disabled = count >= max;
-    addCategory.title = count >= max ? `Six is the most a round can reveal.` : '';
-  };
-
-  const add = (spec) => {
-    const row = hintRow(spec, retally);
-    rows.push(row);
-    list.append(row.node);
-    return row;
-  };
-
-  const draw = (values) => {
+  const draw = (hints) => {
     list.innerHTML = '';
-    rows = [];
-    // Yours lead, matching the order the game reveals them in — anything off the standard ladder
-    // is one of yours, and stays yours whatever the category.
-    for (const [label, value] of values) {
-      if (!hintCatalog.standard.includes(label)) add({ label, value, fixed: false });
+    slots = [];
+    // A standard category this game has no use for cannot be kept; an invented one always can,
+    // including one being written that no card has saved yet.
+    const usable = new Set(offered());
+    const kept = hints
+      .filter((h) => h.label && (usable.has(h.label) || !hintCatalog.standard.includes(h.label)))
+      .slice(0, max);
+
+    for (let index = 0; index < max; index++) {
+      const slot = hintSlot(kept[index] ?? { label: '', value: '' }, { offered, taken, onChange });
+      slots.push(slot);
+      list.append(slot.node);
     }
-    const ladder = hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard;
-    for (const label of ladder) add({ label, value: values.get(label) ?? '', fixed: true });
-    retally();
+    for (const slot of slots) slot.fill();
   };
 
-  /** What is on screen right now, so a redraw doesn't discard half-typed edits. */
-  const typed = () => {
-    const values = new Map();
-    for (const row of rows) {
-      const hint = row.read();
-      if (hint?.label) values.set(hint.label, hint.value);
-    }
-    return values;
-  };
+  draw(player.hints);
 
-  const addCategory = document.createElement('button');
-  addCategory.type = 'button';
-  addCategory.className = 'ghost add-hint';
-  addCategory.textContent = 'Add hint category';
-  // A new one belongs at the head of the list, where it will be revealed from.
-  addCategory.onclick = () => {
-    const row = hintRow({ label: '', value: '', fixed: false }, retally);
-    rows.unshift(row);
-    list.prepend(row.node);
-    row.node.focusLabel();
-    retally();
-  };
-
-  // Typing in any value field changes how many hints there are, so the tally follows along.
-  list.addEventListener('input', retally);
-
-  draw(new Map(player.hints.map((h) => [h.label, h.value])));
-
+  // There is nothing to add: the six slots are always present, filled or not.
   return {
     list,
-    tally,
-    addCategory,
-    // Switching a player's category switches ladders, so the rows redraw around what is typed.
-    recategorise: () => draw(typed()),
+    caption,
+    // Switching a player's category switches which standard categories are on offer.
+    recategorise: () => draw(read()),
     read,
   };
 }
@@ -453,10 +438,7 @@ function renderPlayers() {
     };
 
     actions.append(replace, trace, save, publish, archive, remove);
-    details.append(
-      hintEditor.list, hintEditor.tally, hintEditor.addCategory,
-      aliasLabel, categoryLabelField, actions,
-    );
+    details.append(hintEditor.list, hintEditor.caption, aliasLabel, categoryLabelField, actions);
     body.append(art, details);
     card.append(summary, body);
     dom.players.append(card);

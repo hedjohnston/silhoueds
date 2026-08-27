@@ -54,18 +54,22 @@ Add the hints and accepted spellings by hand once the player is created. **Publi
 until a player has artwork and at least one hint their game actually reveals. Use **Replace
 images** to swap either image later.
 
-A Premier League player has no **League** row: every player in that game is in that league, so the
-hint would burn a guess for nothing. **Add hint category** puts something of your own in its place
-— *Trophy cabinet*, *International caps*, whatever fits. The label is a dropdown of every category
-invented so far, shared by both games, plus **Write a new one…** to name one that isn't there yet.
-Your own hint leads the ladder: it is written for that one footballer rather than drawn from a list
-they all answer, so it gives least away. Moving a player between games redraws their rungs on the
-spot; a League hint stored before the split is ignored by the game immediately, and drops away the
-next time the card is saved.
+Hints are **six numbered slots**, and the order you leave them in is the order they are revealed
+in — slot 1 is what a player earns for their first wrong guess. Six because hard mode releases one
+per wrong guess and there are only six guesses, so a seventh could never be reached.
 
-**Six hints is the cap**, counted off under the rows. Hard mode releases one per wrong guess and
-there are only six guesses, so a seventh could never be reached — the Add button switches off at
-the limit, and the API refuses an over-full save rather than storing hints nothing can reveal.
+Every slot is a dropdown offering the same thing: the standard categories, every category invented
+on any card (one list, shared by both games), and **Write a new one…** to name one that isn't there
+yet. Nothing is pinned to a position — put nationality first if you want the puzzle over quickly,
+or last if you don't.
+
+A Premier League player is never offered **League**: every player in that game is in that league,
+so the hint would burn a guess for nothing. Moving a player between games re-offers the slots on
+the spot, and a League hint stored before the split is ignored by the game immediately.
+
+A category already used on a card disappears from the other five menus, since the same hint twice
+would waste a guess. The API is the backstop for both that and the six-slot cap, refusing an
+over-full or repeating save rather than storing hints nothing can reveal.
 
 **Archive** retires a footballer who has had their day: they leave the player list, they stop
 being a candidate for another round, and every day they already ran still plays. **Archive played**
@@ -104,13 +108,12 @@ Hard mode is unaffected: its photo is never sent early.
 
 ## What players get
 
-- **Hints** arrive one per miss in hard mode, in a fixed ladder — era, position, league,
-  nationality, then the club they're best known for — shown in a panel that counts them off. Era
-  leads because a span of years barely narrows the field while a position splits it into a handful
-  of groups. The ladder lives in `server/hints.mjs`, and the reveal sorts by it rather than
-  trusting stored order, so changing it takes effect for players already in the database. Each game
-  gets the ladder it can use — the Premier League puzzle drops the league rung — and any hint
-  category invented in the admin reveals ahead of the fixed ones.
+- **Hints** arrive one per miss in hard mode, in the order the admin arranged that player's six
+  slots, shown in a panel that counts them off. Stored order is the running order — `hints.mjs`
+  only enforces the rules the database cannot: a category the game has no use for is dropped, a
+  repeat counts once, and nothing past the sixth is reachable. Each game
+  gets the categories it can use — the Premier League puzzle never offers league — and the admin
+  arranges the six slots into whatever running order it wants.
 - **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
   Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
 - **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.
@@ -175,9 +178,9 @@ npm test
 
 `node:test` and `node:assert`, both built into Node — there are no dev dependencies and nothing to
 install. They cover the pure logic where the fiddly bugs live: the fuzzy matcher's tolerance
-boundaries, the streak walk, date resolution, hint gating in both modes, the per-game hint ladders,
-archiving, upload handling, the login throttle, and the category migration run against a fixture
-built on the old schema.
+boundaries, the streak walk, date resolution, hint gating in both modes, the per-game hint
+categories and slot order, archiving, upload handling, the login throttle, and both migrations run
+against fixtures built on the old shape.
 
 **Deploys are gated on this.** `.github/workflows/fly-deploy.yml` runs the suite first and only
 deploys if it passes, so a broken push stops at CI rather than at the Fly health check.
@@ -190,7 +193,7 @@ deploys if it passes, so a broken push stops at CI rather than at the Fly health
 | `server/db.mjs` | SQLite schema and queries |
 | `server/game.mjs` | Round logic: scheduling, hint reveal, win/lose |
 | `server/matching.mjs` | Name normalisation and fuzzy matching |
-| `server/hints.mjs` | The hint ladder, per game, and sorting stored hints into it |
+| `server/hints.mjs` | The hint categories each game offers, and what a player actually reveals |
 | `server/auth.mjs` | Signed admin and play-session cookies, and the login throttle |
 | `server/uploads.mjs` | The uploaded-image directory: serving and deleting |
 | `server/storage.mjs` | Detects a non-persistent disk and warns loudly |
