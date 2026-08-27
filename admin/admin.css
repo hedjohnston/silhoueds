@@ -86,8 +86,9 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .topbar a { color: var(--muted); font-weight: 700; }
 
 .panel { background: var(--panel); border: 3px solid var(--edge); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
-.panel-head { display: flex; justify-content: space-between; align-items: baseline; }
-.counts { color: var(--muted); font-size: 14px; margin: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+/* Pushes the counts up against the heading it belongs to, leaving actions on the right. */
+.counts { color: var(--muted); font-size: 14px; margin: 0 auto 0 0; }
 
 .add-form, .schedule-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
@@ -113,6 +114,9 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .chip-ready { background: var(--ok); }
 .chip-draft { background: var(--card-tint); color: var(--muted); }
 .chip-category { background: var(--card-tint); }
+.chip-ran { background: var(--card-tint); color: var(--muted); }
+.chip-queued { background: var(--accent); }
+.chip-archived { background: var(--card-tint); color: var(--muted); border-style: dashed; }
 
 .category-filter { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .filter-chip { font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 999px; border: 2px solid var(--edge); background: #fff; cursor: pointer; }
@@ -146,6 +150,12 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .hint-rows li { display: flex; align-items: center; gap: 10px; }
 .hint-row-label { flex: 0 0 108px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .hint-rows input { flex: 1; }
+/* A hint category of your own: the label is typed rather than fixed, so it reads as a field. */
+/* min-width: 0 or the input's intrinsic width wins and the label column stops lining up. */
+.hint-row-custom input.hint-row-label { flex: 0 0 108px; min-width: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; }
+.hint-row-drop { padding: 4px 9px; line-height: 1; }
+/* Sits under the rungs as an offer, not as another full-width field. */
+.add-hint { align-self: flex-start; font-size: 13px; padding: 6px 12px; }
 
 .alias-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .alias-label input { text-transform: none; letter-spacing: normal; font-size: 15px; }

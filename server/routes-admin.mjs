@@ -9,7 +9,7 @@ import {
   checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin,
   loginDelay, recordFailedLogin, clearFailedLogins,
 } from './auth.mjs';
-import { HINT_LABELS } from './hints.mjs';
+import { HINT_LABELS, hintLabelsFor, playableHints } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
@@ -84,12 +84,44 @@ function uniqueSlug(name) {
   return slug;
 }
 
-/** A player is only playable with artwork and at least one hint. */
+/**
+ * A player is only playable with artwork and at least one hint.
+ *
+ * The hints counted are the ones their category actually reveals, so a Premier League player
+ * carrying nothing but a League hint is still a draft rather than a round with no help in it.
+ */
 function readiness(player) {
   const missing = [];
   if (!hasArtwork(player)) missing.push('silhouette');
-  if (!player.hints?.length) missing.push('hints');
+  if (playableHints(player).length === 0) missing.push('hints');
   return missing;
+}
+
+/**
+ * What the admin needs to lay out the hint editor.
+ *
+ * `ladders` is the fixed rungs each category plays with — Premier League has no use for a League
+ * hint, so its ladder is a rung shorter and the admin offers a category of your own instead.
+ * `custom` is every invented label already in use, so a second player can reuse one from a list
+ * rather than being retyped exactly.
+ */
+function hintCatalog() {
+  const custom = new Set();
+  for (const player of players.all()) {
+    for (const hint of player.hints ?? []) {
+      if (hint?.label && !HINT_LABELS.includes(hint.label)) custom.add(hint.label);
+    }
+  }
+  return {
+    standard: HINT_LABELS,
+    ladders: Object.fromEntries(CATEGORIES.map((category) => [category, hintLabelsFor(category)])),
+    custom: [...custom].sort(),
+  };
+}
+
+/** Player rows as the admin wants them: readiness, plus when they last had (or have) a day. */
+function forAdmin(lastRuns = new Map()) {
+  return (player) => ({ ...player, missing: readiness(player), lastScheduled: lastRuns.get(player.id) ?? null });
 }
 
 export const adminRouter = express.Router();
@@ -125,7 +157,6 @@ adminRouter.get('/session', (req, res) => {
   res.json({
     signedIn: isAdmin(req),
     storage: storageStatus(),
-    hintLabels: HINT_LABELS,
     categories: CATEGORIES,
   });
 });
@@ -133,10 +164,31 @@ adminRouter.get('/session', (req, res) => {
 adminRouter.use(requireAdmin);
 
 adminRouter.get('/players', (req, res) => {
+  const lastRuns = new Map(schedule.lastScheduled().map((row) => [row.player_id, row.date]));
   res.json({
-    players: players.all().map((p) => ({ ...p, missing: readiness(p) })),
-    hintLabels: HINT_LABELS,
+    players: players.all().map(forAdmin(lastRuns)),
+    hints: hintCatalog(),
+    today: todayKey(new Date(), zoneOf(req)),
   });
+});
+
+/**
+ * Archive every footballer whose day has already come and gone.
+ *
+ * Doing this one card at a time is the tedium this removes: a scheduled player is spent, and once
+ * their date has passed there is nothing left to decide about them. Only past dates count — a
+ * player booked for next week is still waiting for their round.
+ */
+adminRouter.post('/players/archive-played', (req, res) => {
+  const today = todayKey(new Date(), zoneOf(req));
+  let archived = 0;
+  for (const id of schedule.playedPlayerIds(today)) {
+    const player = players.get(id);
+    if (!player || player.archived) continue;
+    players.update(id, { archived: true });
+    archived++;
+  }
+  res.json({ ok: true, archived });
 });
 
 /** Create a player from a typed name plus their two images. Hints are entered by hand. */
@@ -164,7 +216,7 @@ adminRouter.post('/players', uploads, async (req, res) => {
     category: categoryOf(req),
   });
 
-  res.status(201).json({ player: { ...player, missing: readiness(player) } });
+  res.status(201).json({ player: forAdmin()(player) });
 });
 
 // Replace either image on an existing player.
@@ -196,7 +248,7 @@ adminRouter.post('/players/:id/images', uploads, (req, res) => {
   }
 
   const updated = players.update(player.id, fields);
-  res.json({ player: { ...updated, missing: readiness(updated) } });
+  res.json({ player: forAdmin()(updated) });
 });
 
 
@@ -217,6 +269,9 @@ adminRouter.patch('/players/:id', (req, res) => {
   if (typeof req.body.category === 'string' && CATEGORIES.includes(req.body.category)) {
     fields.category = req.body.category;
   }
+  // Archiving is reversible and says nothing about whether a player is finished, so it is set
+  // independently of status — an archived player stays published for the days they already ran.
+  if (typeof req.body.archived === 'boolean') fields.archived = req.body.archived;
 
   if (req.body.status === 'ready' || req.body.status === 'draft') {
     const candidate = { ...player, ...fields };
@@ -228,7 +283,7 @@ adminRouter.patch('/players/:id', (req, res) => {
   }
 
   const updated = players.update(player.id, fields);
-  res.json({ player: { ...updated, missing: readiness(updated) } });
+  res.json({ player: forAdmin()(updated) });
 });
 
 adminRouter.delete('/players/:id', (req, res) => {

@@ -2,10 +2,12 @@
 
 A daily guessing game: name the footballer from their silhouette.
 
-Two independent daily puzzles run side by side — Premier League and International — each its own
+Two independent daily puzzles run side by side — Premier League and The Rest — each its own
 schedule, streak and stats, switched with a tab in the game. One player per puzzle per day, six
 guesses. Every wrong guess (or a skip) reveals the next hint — era, position, league, nationality,
 then the club they're best known for. Finish and you get a shareable emoji grid.
+
+(The Rest is filed under `international` in the database and the API. Only the label changed.)
 
 There is no dropdown of names. Players type a guess freely, and the server decides whether it's
 right — the browser never receives the answer until the round is over.
@@ -49,8 +51,20 @@ In the admin, type the name and upload two images:
 | **Full photo** | Revealed in place of the silhouette once the round ends |
 
 Add the hints and accepted spellings by hand once the player is created. **Publish** is refused
-until a player has artwork and at least one hint. Use **Replace images** to swap either image
-later.
+until a player has artwork and at least one hint their game actually reveals. Use **Replace
+images** to swap either image later.
+
+A Premier League player has no **League** row: every player in that game is in that league, so the
+hint would burn a guess for nothing. **Add hint category** puts something of your own in its place
+— *Trophy cabinet*, *International caps*, whatever fits — and a category invented once is offered
+to every other card. Custom hints reveal after the fixed ladder. Moving a player between games
+redraws their rungs on the spot; a League hint stored before the split is ignored by the game
+immediately, and drops away the next time the card is saved.
+
+**Archive** retires a footballer who has had their day: they leave the player list, they stop
+being a candidate for another round, and every day they already ran still plays. **Archive played**
+does the whole backlog in one click — everyone whose scheduled date has passed, leaving anyone
+still booked ahead alone. Both are reversible with **Restore**, from the **Archived** filter.
 
 For a player you have no silhouette image for, **Trace by hand** in the admin lets you click an
 outline around the photo instead.
@@ -88,7 +102,9 @@ Hard mode is unaffected: its photo is never sent early.
   nationality, then the club they're best known for — shown in a panel that counts them off. Era
   leads because a span of years barely narrows the field while a position splits it into a handful
   of groups. The ladder lives in `server/hints.mjs`, and the reveal sorts by it rather than
-  trusting stored order, so changing it takes effect for players already in the database.
+  trusting stored order, so changing it takes effect for players already in the database. Each game
+  gets the ladder it can use — the Premier League puzzle drops the league rung — and any hint
+  category invented in the admin reveals after the fixed ones.
 - **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
   Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
 - **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.
@@ -153,8 +169,9 @@ npm test
 
 `node:test` and `node:assert`, both built into Node — there are no dev dependencies and nothing to
 install. They cover the pure logic where the fiddly bugs live: the fuzzy matcher's tolerance
-boundaries, the streak walk, date resolution, hint gating in both modes, upload handling, the login
-throttle, and the category migration run against a fixture built on the old schema.
+boundaries, the streak walk, date resolution, hint gating in both modes, the per-game hint ladders,
+archiving, upload handling, the login throttle, and the category migration run against a fixture
+built on the old schema.
 
 **Deploys are gated on this.** `.github/workflows/fly-deploy.yml` runs the suite first and only
 deploys if it passes, so a broken push stops at CI rather than at the Fly health check.
@@ -167,7 +184,7 @@ deploys if it passes, so a broken push stops at CI rather than at the Fly health
 | `server/db.mjs` | SQLite schema and queries |
 | `server/game.mjs` | Round logic: scheduling, hint reveal, win/lose |
 | `server/matching.mjs` | Name normalisation and fuzzy matching |
-| `server/hints.mjs` | The hint ladder, and sorting stored hints into it |
+| `server/hints.mjs` | The hint ladder, per game, and sorting stored hints into it |
 | `server/auth.mjs` | Signed admin and play-session cookies, and the login throttle |
 | `server/uploads.mjs` | The uploaded-image directory: serving and deleting |
 | `server/storage.mjs` | Detects a non-persistent disk and warns loudly |
@@ -185,7 +202,7 @@ Public:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day. `?category=premier-league\|international` picks the game, default `international` |
+| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day. `?category=premier-league\|international` picks the game, default `international` (shown as "The Rest") |
 | `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
 | `POST /api/skip` | Burns a guess to reveal a hint |
 | `POST /api/mode` | `{ mode }` → sets hard or easy; refused once the round has a guess |
@@ -193,16 +210,17 @@ Public:
 | `GET /api/archive` | Past puzzles and how this visitor did on each |
 
 Every endpoint above takes `?category=` (or `{ category }` in the body) — Premier League and
-International are separate games with their own schedule, plays and stats.
+The Rest are separate games with their own schedule, plays and stats.
 
 Admin, all behind a signed cookie except `/login`, `/logout` and `/session`:
 
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/admin/login` \| `/logout` | Sign in or out. Login is throttled per caller after six failures |
-| `GET /api/admin/session` | Whether you're signed in, plus the storage warning and hint labels |
+| `GET /api/admin/session` | Whether you're signed in, plus the storage warning and the category list |
 | `GET\|POST /api/admin/players` | List, or create from a name and images |
-| `PATCH\|DELETE /api/admin/players/:id` | Edit hints, aliases, category, traced silhouette, status — or remove |
+| `PATCH\|DELETE /api/admin/players/:id` | Edit hints, aliases, category, traced silhouette, status, archived — or remove |
+| `POST /api/admin/players/archive-played` | Archive every footballer whose scheduled date has passed |
 | `POST /api/admin/players/:id/images` | Replace the silhouette and/or the photo |
 | `GET /api/admin/players/:id/photo` \| `/silhouette-image` | The stored images, for review |
 | `GET\|PUT\|DELETE /api/admin/schedule[/:date]` | Read the queue, pin a player to a day, or clear one |

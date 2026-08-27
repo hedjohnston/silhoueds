@@ -3,7 +3,7 @@
 
 import { players, schedule, plays, CATEGORIES, DEFAULT_CATEGORY } from './db.mjs';
 import { matchesPlayer } from './matching.mjs';
-import { inLadderOrder } from './hints.mjs';
+import { playableHints } from './hints.mjs';
 
 export { CATEGORIES, DEFAULT_CATEGORY };
 
@@ -191,11 +191,12 @@ function nextDay(date) {
  * ladder from the start instead: the photo is already doing the progressive reveal there, so
  * gating the text hints too would just be hiding help the round doesn't need hidden.
  *
- * Sorted into ladder order rather than trusting the stored order: players saved before the ladder
- * changed still hold the old sequence, and the admin allows hand editing.
+ * `playableHints` rather than the stored order: players saved before the ladder changed still hold
+ * the old sequence, the admin allows hand editing, and a rung the player's category has no use for
+ * (the league of a Premier League player) is dropped rather than revealed.
  */
 function revealedHints(player, guesses, easy) {
-  const ordered = inLadderOrder(player.hints);
+  const ordered = playableHints(player);
   if (easy) return ordered;
   const misses = guesses.filter((g) => !g.correct).length;
   return ordered.slice(0, Math.min(misses, ordered.length));
@@ -205,7 +206,7 @@ function revealedHints(player, guesses, easy) {
 function blurFor(player, guesses, finished) {
   if (finished) return 0;
   const misses = guesses.filter((g) => !g.correct).length;
-  const rungs = (player.hints.length || 1) + 1;
+  const rungs = (playableHints(player).length || 1) + 1;
   return Math.round(START_BLUR * (1 - Math.min(misses, rungs) / rungs));
 }
 
@@ -232,7 +233,7 @@ export function publicState(player, play) {
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
     hints: revealedHints(player, guesses, easy),
     // How many exist in total, so the panel can show how much help is left.
-    hintsTotal: player.hints.length,
+    hintsTotal: playableHints(player).length,
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),
     guessesLeft: MAX_GUESSES - guesses.length,
     maxGuesses: MAX_GUESSES,

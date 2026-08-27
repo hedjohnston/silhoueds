@@ -65,6 +65,7 @@
       <div class="panel-head">
         <h2>Players</h2>
         <p class="counts" id="counts"></p>
+        <button class="ghost" id="archive-played" type="button">Archive played</button>
       </div>
       <input class="player-filter" id="player-filter" type="text" placeholder="Filter players…">
       <div class="category-filter" id="player-category-filter" role="group" aria-label="Filter by category"></div>
@@ -88,7 +89,7 @@
       <h2>Schedule</h2>
       <p class="hint-text">
         Unscheduled days pick a ready player automatically. Set a date to override. Premier
-        League and International run as two separate daily puzzles, each with its own schedule.
+        League and The Rest run as two separate daily puzzles, each with its own schedule.
       </p>
       <form class="schedule-form" id="schedule-form">
         <select id="schedule-category" required></select>
@@ -108,6 +109,9 @@
       <p class="error" id="schedule-error" role="alert"></p>
     </section>
   </div>
+
+  <!-- Hint categories invented on one player, offered to the rest rather than retyped. -->
+  <datalist id="custom-hint-labels"></datalist>
 
   <dialog class="tracer" id="tracer">
     <form method="dialog" class="tracer-close"><button aria-label="Close">✕</button></form>

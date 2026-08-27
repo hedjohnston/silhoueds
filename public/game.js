@@ -111,8 +111,9 @@ function hintsCovered() {
   return state.mode === 'easy' && !state.finished && !revealedRounds.includes(roundId(state));
 }
 
-// Premier League and International are two independent daily games — switching just opens the
-// other one, the way switching difficulty doesn't.
+// Premier League and The Rest are two independent daily games — switching just opens the other
+// one, the way switching difficulty doesn't. The tag stays `international`: it is what every
+// stored play and schedule row is filed under, and only the label on the button changed.
 let category = preferredCategory();
 
 // Which round is on screen — today unless the archive opened an earlier one.

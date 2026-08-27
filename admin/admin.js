@@ -11,23 +11,33 @@ const dom = Object.fromEntries(
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
     'storage-alarm', 'insights', 'insight-category', 'insight-date',
+    'archive-played', 'custom-hint-labels',
   ].map((id) => [id, el(id)]),
 );
 
 let players = [];
-let hintLabels = [];
+// The fixed rungs each category plays with, plus every hint category invented so far.
+let hintCatalog = { standard: [], ladders: {}, custom: [] };
 let usedPlayerIds = [];
+// The operator's own today, from the server — what makes a scheduled day "already run".
+let today = null;
 let tracingPlayer = null;
 // Which player cards are expanded, so a re-render (e.g. after Save edits) doesn't collapse them.
 const expandedPlayerIds = new Set();
 
-// Premier League and International are two independent daily games, distinguished only by this
+// Premier League and The Rest are two independent daily games, distinguished only by this
 // tag on each player. Populated from the server so the label list lives in one place.
+//
+// The labels are display only — the stored tag stays `international`, so renaming the game costs
+// no migration and no change to any saved player, schedule row or play.
 let categories = [];
-const CATEGORY_LABELS = { 'premier-league': 'Premier League', international: 'International' };
+const CATEGORY_LABELS = { 'premier-league': 'Premier League', international: 'The Rest' };
 const categoryLabel = (category) => CATEGORY_LABELS[category] ?? category;
 
+// 'all' or one category shows the working set; 'archived' is the only view that shows retired
+// footballers, so a season's worth of spent players stays out of the way.
 let playerFilter = 'all';
+const ARCHIVED_FILTER = 'archived';
 let scheduleCategory = null;
 let insightCategory = null;
 
@@ -97,13 +107,129 @@ function buildArt(player, { small = false } = {}) {
   return art;
 }
 
+/**
+ * One editable hint row. A fixed rung of the ladder carries its label; a hint category invented
+ * here lets you name it, and drop it again.
+ */
+function hintRow({ label, value, fixed }) {
+  const node = document.createElement('li');
+  const field = document.createElement('input');
+  field.value = value ?? '';
+  field.placeholder = '—';
+  let dropped = false;
+  let name;
+
+  if (fixed) {
+    name = document.createElement('span');
+    name.className = 'hint-row-label';
+    name.textContent = label;
+    node.append(name, field);
+  } else {
+    node.className = 'hint-row-custom';
+    name = document.createElement('input');
+    name.className = 'hint-row-label';
+    name.value = label ?? '';
+    name.placeholder = 'Hint category';
+    // Whatever has been invented on another player, offered rather than retyped exactly.
+    name.setAttribute('list', 'custom-hint-labels');
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'ghost danger hint-row-drop';
+    drop.textContent = '✕';
+    drop.title = 'Remove this hint category';
+    drop.onclick = () => {
+      dropped = true;
+      node.remove();
+    };
+    node.append(name, field, drop);
+  }
+
+  return {
+    node,
+    read: () =>
+      dropped ? null : { label: fixed ? label : name.value.trim(), value: field.value.trim() },
+  };
+}
+
+/**
+ * The hint editor for one player: their category's fixed rungs, then any hint category invented
+ * for them, in the order the game reveals them.
+ *
+ * A rung the category has no use for is simply absent — a Premier League player has no League row,
+ * because every player in that game is in that league. A League hint stored before the split is
+ * already ignored by the game, and drops away the next time the card is saved.
+ */
+function buildHintEditor(player, chosenCategory) {
+  const list = document.createElement('ol');
+  list.className = 'hint-rows';
+  let rows = [];
+
+  const add = (spec) => {
+    const row = hintRow(spec);
+    rows.push(row);
+    list.append(row.node);
+    return row;
+  };
+
+  const draw = (values) => {
+    list.innerHTML = '';
+    rows = [];
+    const ladder = hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard;
+    for (const label of ladder) add({ label, value: values.get(label) ?? '', fixed: true });
+    // Anything off the standard ladder is one of yours, and stays yours whatever the category.
+    for (const [label, value] of values) {
+      if (!hintCatalog.standard.includes(label)) add({ label, value, fixed: false });
+    }
+  };
+
+  /** What is on screen right now, so a redraw doesn't discard half-typed edits. */
+  const typed = () => {
+    const values = new Map();
+    for (const row of rows) {
+      const hint = row.read();
+      if (hint?.label) values.set(hint.label, hint.value);
+    }
+    return values;
+  };
+
+  draw(new Map(player.hints.map((h) => [h.label, h.value])));
+
+  const addCategory = document.createElement('button');
+  addCategory.type = 'button';
+  addCategory.className = 'ghost add-hint';
+  addCategory.textContent = 'Add hint category';
+  addCategory.onclick = () => add({ label: '', value: '', fixed: false }).node.querySelector('input').focus();
+
+  return {
+    list,
+    addCategory,
+    // Switching a player's category switches ladders, so the rows redraw around what is typed.
+    recategorise: () => draw(typed()),
+    read: () => {
+      const seen = new Set();
+      const hints = [];
+      for (const row of rows) {
+        const hint = row.read();
+        // A blank value is how a hint is cleared, and a second row named the same is a slip.
+        if (!hint?.label || !hint.value || seen.has(hint.label)) continue;
+        seen.add(hint.label);
+        hints.push(hint);
+      }
+      return hints;
+    },
+  };
+}
+
 function renderPlayerCategoryFilter() {
   dom['player-category-filter'].innerHTML = '';
-  for (const value of ['all', ...categories]) {
+  const archivedCount = players.filter((p) => p.archived).length;
+  for (const value of ['all', ...categories, ARCHIVED_FILTER]) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = value === playerFilter ? 'filter-chip filter-chip-active' : 'filter-chip';
-    button.textContent = value === 'all' ? 'All' : categoryLabel(value);
+    if (value === 'all') button.textContent = 'All';
+    else if (value === ARCHIVED_FILTER) button.textContent = `Archived (${archivedCount})`;
+    else button.textContent = categoryLabel(value);
     button.onclick = () => {
       playerFilter = value;
       renderPlayerCategoryFilter();
@@ -116,9 +242,13 @@ function renderPlayerCategoryFilter() {
 function renderPlayers() {
   dom.players.innerHTML = '';
   const query = dom['player-filter'].value.trim().toLowerCase();
+  // Archived footballers show in their own view and nowhere else — that is what archiving buys.
   const visible = players
     .filter((p) => !query || p.name.toLowerCase().includes(query))
-    .filter((p) => playerFilter === 'all' || p.category === playerFilter);
+    .filter((p) =>
+      playerFilter === ARCHIVED_FILTER
+        ? p.archived
+        : !p.archived && (playerFilter === 'all' || p.category === playerFilter));
 
   for (const player of visible) {
     const card = document.createElement('details');
@@ -140,6 +270,21 @@ function renderPlayers() {
     chip.innerHTML = statusChip(player);
     summary.append(thumb, title, category, chip);
 
+    // When they had their day, so a spent footballer is obvious without opening the card.
+    if (player.lastScheduled) {
+      const ran = document.createElement('span');
+      const past = player.lastScheduled <= today;
+      ran.className = past ? 'chip chip-ran' : 'chip chip-queued';
+      ran.textContent = `${past ? 'Ran' : 'Booked'} ${player.lastScheduled}`;
+      summary.append(ran);
+    }
+    if (player.archived) {
+      const archived = document.createElement('span');
+      archived.className = 'chip chip-archived';
+      archived.textContent = 'Archived';
+      summary.append(archived);
+    }
+
     const body = document.createElement('div');
     body.className = 'player-body';
 
@@ -148,21 +293,15 @@ function renderPlayers() {
     const details = document.createElement('div');
     details.className = 'player-details';
 
-    const hints = document.createElement('ol');
-    hints.className = 'hint-rows';
-    for (const label of hintLabels) {
-      const existing = player.hints.find((h) => h.label === label);
-      const row = document.createElement('li');
-      const name = document.createElement('span');
-      name.className = 'hint-row-label';
-      name.textContent = label;
-      const input = document.createElement('input');
-      input.value = existing?.value ?? '';
-      input.placeholder = '—';
-      input.dataset.label = label;
-      row.append(name, input);
-      hints.append(row);
-    }
+    const categoryField = document.createElement('select');
+    categoryField.className = 'category-select';
+    fillCategorySelect(categoryField);
+    categoryField.value = player.category;
+
+    const hintEditor = buildHintEditor(player, () => categoryField.value);
+    // Each game has its own ladder, so moving a player between them redraws their rungs at once
+    // rather than after a save-and-reload.
+    categoryField.onchange = () => hintEditor.recategorise();
 
     const aliasField = document.createElement('input');
     aliasField.className = 'aliases';
@@ -173,11 +312,6 @@ function renderPlayers() {
     aliasLabel.className = 'alias-label';
     aliasLabel.textContent = 'Also accepted';
     aliasLabel.append(aliasField);
-
-    const categoryField = document.createElement('select');
-    categoryField.className = 'category-select';
-    fillCategorySelect(categoryField);
-    categoryField.value = player.category;
 
     const categoryLabelField = document.createElement('label');
     categoryLabelField.className = 'alias-label';
@@ -201,14 +335,11 @@ function renderPlayers() {
     save.className = 'ghost';
     save.textContent = 'Save edits';
     save.onclick = async () => {
-      const edited = [...hints.querySelectorAll('input')]
-        .map((input) => ({ label: input.dataset.label, value: input.value.trim() }))
-        .filter((h) => h.value);
       try {
         await api(`/api/admin/players/${player.id}`, {
           method: 'PATCH',
           body: {
-            hints: edited,
+            hints: hintEditor.read(),
             category: categoryField.value,
             aliases: aliasField.value.split(',').map((a) => a.trim()).filter(Boolean),
           },
@@ -234,6 +365,23 @@ function renderPlayers() {
       }
     };
 
+    // Archiving is the gentle version of Delete: the footballer keeps every round they ran, and
+    // simply stops being a candidate for another one.
+    const archive = document.createElement('button');
+    archive.className = 'ghost';
+    archive.textContent = player.archived ? 'Restore' : 'Archive';
+    archive.onclick = async () => {
+      try {
+        await api(`/api/admin/players/${player.id}`, {
+          method: 'PATCH',
+          body: { archived: !player.archived },
+        });
+        await refresh();
+      } catch (error) {
+        alert(error.message);
+      }
+    };
+
     const remove = document.createElement('button');
     remove.className = 'ghost danger';
     remove.textContent = 'Delete';
@@ -243,15 +391,30 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(replace, trace, save, publish, remove);
-    details.append(hints, aliasLabel, categoryLabelField, actions);
+    actions.append(replace, trace, save, publish, archive, remove);
+    details.append(hintEditor.list, hintEditor.addCategory, aliasLabel, categoryLabelField, actions);
     body.append(art, details);
     card.append(summary, body);
     dom.players.append(card);
   }
 
-  const live = players.filter((p) => p.status === 'ready').length;
-  dom.counts.textContent = `${live} live · ${players.length - live} draft`;
+  const active = players.filter((p) => !p.archived);
+  const live = active.filter((p) => p.status === 'ready').length;
+  const archived = players.length - active.length;
+  dom.counts.textContent =
+    `${live} live · ${active.length - live} draft` + (archived ? ` · ${archived} archived` : '');
+  renderArchivePlayed();
+}
+
+/** Everyone whose day has passed and who is still cluttering up the live list. */
+function playedButActive() {
+  return players.filter((p) => !p.archived && p.lastScheduled && p.lastScheduled <= today);
+}
+
+function renderArchivePlayed() {
+  const spent = playedButActive().length;
+  dom['archive-played'].disabled = spent === 0;
+  dom['archive-played'].textContent = spent === 0 ? 'Archive played' : `Archive ${spent} played`;
 }
 
 /** Ready players in the schedule's own category that have never been scheduled anywhere. */
@@ -314,6 +477,16 @@ function initSchedulePicker() {
   });
 }
 
+/** The hint categories already invented, offered to every card's label field. */
+function renderCustomHintLabels() {
+  dom['custom-hint-labels'].innerHTML = '';
+  for (const label of hintCatalog.custom ?? []) {
+    const option = document.createElement('option');
+    option.value = label;
+    dom['custom-hint-labels'].append(option);
+  }
+}
+
 /** Clear whatever was typed/picked in the schedule form — used when the category changes. */
 function resetSchedulePicker() {
   dom['schedule-player-search'].value = '';
@@ -324,7 +497,10 @@ function resetSchedulePicker() {
 async function refresh() {
   const data = await api('/api/admin/players');
   players = data.players;
-  hintLabels = data.hintLabels;
+  hintCatalog = data.hints;
+  today = data.today;
+  renderCustomHintLabels();
+  renderPlayerCategoryFilter();
   renderPlayers();
   await refreshSchedule();
   await refreshInsightDates().catch(() => {});
@@ -640,6 +816,18 @@ dom['schedule-category'].onchange = async () => {
   await refreshSchedule();
 };
 
+dom['archive-played'].onclick = async () => {
+  const spent = playedButActive();
+  if (spent.length === 0) return;
+  if (!confirm(`Archive ${spent.length} footballer(s) whose day has already been and gone?`)) return;
+  try {
+    await api('/api/admin/players/archive-played', { method: 'POST' });
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
 dom['insight-category'].onchange = async () => {
   insightCategory = dom['insight-category'].value;
   await refreshInsightDates();
@@ -663,7 +851,6 @@ async function start() {
   fillCategorySelect(dom['insight-category']);
   dom['schedule-category'].value = scheduleCategory;
   dom['insight-category'].value = insightCategory;
-  renderPlayerCategoryFilter();
 
   // The one failure that silently destroys work: writing to a disk that isn't persistent.
   const ephemeral = storage && storage.checked && !storage.mounted;

@@ -7,7 +7,8 @@ import path from 'node:path';
 
 export const DB_PATH = process.env.SILHOUEDS_DB ?? 'data/silhoueds.db';
 
-// Two independent daily games share this database, distinguished only by this tag.
+// Two independent daily games share this database, distinguished only by this tag. `international`
+// is shown as "The Rest" — a display label only, so the rename cost no migration.
 export const CATEGORIES = ['premier-league', 'international'];
 export const DEFAULT_CATEGORY = 'international';
 
@@ -32,6 +33,8 @@ db.exec(`
     status           TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
                              CHECK (status IN ('draft', 'ready')),
     hint_source      TEXT    NOT NULL DEFAULT 'manual',
+    -- Retired from the pool: kept for the archive of past rounds, out of the way everywhere else.
+    archived         INTEGER NOT NULL DEFAULT 0,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
   );
@@ -74,6 +77,8 @@ for (const [name, definition] of [
   // Everyone seeded before categories existed played as international stars, not Premier
   // League specialists, so that is the default the migration gives them.
   ['category', `TEXT NOT NULL DEFAULT '${DEFAULT_CATEGORY}'`],
+  // Nobody is archived until someone says so, so every existing player carries forward live.
+  ['archived', 'INTEGER NOT NULL DEFAULT 0'],
 ]) {
   if (!hasColumn('players', name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
@@ -106,7 +111,7 @@ function migrate(name, statements) {
   }
 }
 
-// Premier League and International are separate daily games, so `schedule` and `plays` both need
+// Premier League and The Rest are separate daily games, so `schedule` and `plays` both need
 // `category` folded into their primary key. SQLite can't alter a primary key in place, hence the
 // rebuild. Only databases created before categories existed reach these — a fresh install already
 // has the right shape from the CREATE TABLE above. Existing rows carry forward as
@@ -154,6 +159,7 @@ const parse = (row) =>
     aliases: JSON.parse(row.aliases),
     hints: JSON.parse(row.hints),
     status: row.status,
+    archived: !!row.archived,
   };
 
 export const players = {
@@ -166,13 +172,20 @@ export const players = {
   bySlug(slug) {
     return parse(db.prepare('SELECT * FROM players WHERE slug = ?').get(slug));
   },
+  /**
+   * The pool a day can be filled from. Archived players are excluded: they have had their run,
+   * and the whole point of archiving is that auto-assignment stops coming back to them.
+   */
   ready(category) {
     return category
       ? db
-          .prepare("SELECT * FROM players WHERE status = 'ready' AND category = ? ORDER BY id")
+          .prepare("SELECT * FROM players WHERE status = 'ready' AND archived = 0 AND category = ? ORDER BY id")
           .all(category)
           .map(parse)
-      : db.prepare("SELECT * FROM players WHERE status = 'ready' ORDER BY id").all().map(parse);
+      : db
+          .prepare("SELECT * FROM players WHERE status = 'ready' AND archived = 0 ORDER BY id")
+          .all()
+          .map(parse);
   },
   /** Every image filename a player owns, for cleaning up on delete or replace. */
   images(player) {
@@ -206,6 +219,7 @@ export const players = {
       status: (v) => v,
       hint_source: (v) => v,
       category: (v) => v,
+      archived: (v) => (v ? 1 : 0),
     };
     const sets = [];
     const values = [];
@@ -272,6 +286,20 @@ export const schedule = {
     return db
       .prepare('SELECT player_id FROM schedule WHERE date >= ? AND category = ?')
       .all(since, category)
+      .map((r) => r.player_id);
+  },
+  /**
+   * The last date each player is booked for, as `{ player_id, date }`. The admin shows it, and
+   * uses it to tell a footballer who has already run from one still queued up ahead.
+   */
+  lastScheduled() {
+    return db.prepare('SELECT player_id, MAX(date) AS date FROM schedule GROUP BY player_id').all();
+  },
+  /** Everyone whose day has already come and gone — the ones worth archiving in one go. */
+  playedPlayerIds(today) {
+    return db
+      .prepare('SELECT DISTINCT player_id FROM schedule WHERE date <= ?')
+      .all(today)
       .map((r) => r.player_id);
   },
   /** Every player ever scheduled, any date — the picker excludes these; a player is used once. */

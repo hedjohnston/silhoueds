@@ -7,12 +7,30 @@
 export const HINT_LABELS = ['Era', 'Position', 'League', 'Nationality', 'Best known at'];
 
 /**
+ * Rungs a category has no use for.
+ *
+ * Every player in the Premier League game plays in the Premier League, so that hint tells you
+ * nothing you didn't know from the tab you're on — it would burn a guess for free. It is dropped
+ * from the ladder rather than left blank, and the admin offers a hint category of your own in its
+ * place.
+ */
+const IRRELEVANT_LABELS = { 'premier-league': ['League'] };
+
+const irrelevantTo = (category) => IRRELEVANT_LABELS[category] ?? [];
+
+/** The ladder one category actually plays with. */
+export function hintLabelsFor(category) {
+  const dropped = irrelevantTo(category);
+  return HINT_LABELS.filter((label) => !dropped.includes(label));
+}
+
+/**
  * Put a player's hints in ladder order.
  *
  * Players saved before the order changed still hold their hints in the old sequence, and the
  * admin lets them be edited by hand into any order at all, so the reveal sorts rather than
- * trusting what is stored. Anything with an unrecognised label sorts to the end rather than
- * being dropped.
+ * trusting what is stored. Anything with an unrecognised label — a hint category invented in the
+ * admin for one player — sorts to the end rather than being dropped.
  */
 export function inLadderOrder(hints = []) {
   const rank = (hint) => {
@@ -20,4 +38,16 @@ export function inLadderOrder(hints = []) {
     return index === -1 ? HINT_LABELS.length : index;
   };
   return [...hints].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The hints a player actually plays with: their own, in ladder order, minus any rung their
+ * category has no use for.
+ *
+ * The filter runs at reveal time rather than on save so a player who changes category — or one
+ * stored before their category dropped a rung — is right immediately, without an edit.
+ */
+export function playableHints(player) {
+  const dropped = irrelevantTo(player?.category);
+  return inLadderOrder((player?.hints ?? []).filter((hint) => !dropped.includes(hint?.label)));
 }
