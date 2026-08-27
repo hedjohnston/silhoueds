@@ -31,7 +31,8 @@ Two environment variables are required and the server refuses to boot without th
 | --- | --- |
 | `SILHOUEDS_SECRET` | Signs the admin and play-session cookies |
 | `SILHOUEDS_ADMIN_PASSWORD` | The password for `/admin` |
-| `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `UTC` (see below) |
+| `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `Australia/Sydney` |
+| `SILHOUEDS_ACCEPT_EPHEMERAL` | Optional — silences the persistent-disk warning |
 | `SILHOUEDS_PUBLIC_URL` | Optional — only behind a proxy that rewrites the host |
 
 Storage is a SQLite file at `data/silhoueds.db`, via `node:sqlite` — built into Node 22.5+, so
@@ -65,8 +66,11 @@ Two modes, chosen with a toggle above the puzzle and remembered for next time.
 - **Hard** — the original game. A black silhouette, and the colour photo is not sent to the
   browser at all until the round is over.
 - **Easy** — the colour photo takes the stage from the start, blurred to 34px, sharpening a step
-  with every hint earned and clearing when the round ends. Kit colours and posture read early,
-  the face last.
+  with every guess or skip spent and clearing when the round ends. Kit colours and posture read
+  early, the face last. The hints are all available from the off rather than being earned, but
+  they stay behind a **Reveal hints** cover until asked for — otherwise a player who meant to
+  take the puzzle on hard has read every hint before they reach the toggle. Revealing is
+  remembered per round, so a reload mid-round doesn't hide them again.
 
 The mode belongs to the round, not the browser: it is stored on the play and **locked once the
 first guess is made**, so a round can't be started hard and finished easy. Easy rounds are marked
@@ -80,23 +84,20 @@ Hard mode is unaffected: its photo is never sent early.
 
 ## What players get
 
-- **Hints** arrive one per miss, in a fixed ladder — position, era, league, nationality, then
-  the club they're best known for — shown in a panel that counts them off. The ladder lives in
-  `server/hints.mjs`, and the reveal sorts by it rather than trusting stored order, so changing
-  it takes effect for players already in the database.
+- **Hints** arrive one per miss in hard mode, in a fixed ladder — era, position, league,
+  nationality, then the club they're best known for — shown in a panel that counts them off. Era
+  leads because a span of years barely narrows the field while a position splits it into a handful
+  of groups. The ladder lives in `server/hints.mjs`, and the reveal sorts by it rather than
+  trusting stored order, so changing it takes effect for players already in the database.
 - **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
   Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
 - **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.
   A future date is refused, and a past date that never ran is refused rather than assigned on
   demand, which would quietly burn through the pool.
 - **Sharing** — the button opens the phone's own share sheet where there is one (iOS, Android,
-  most desktop browsers), falling back to the clipboard. The link is passed separately from the
-  grid so it doesn't appear twice in the message.
-- **Link previews** — two images, because platforms crop differently. `og:image` is
-  `preview-square.png` (1200×1200), since WhatsApp, iMessage and Slack crop to a square and a
-  landscape card is reduced to a sliver of its middle. `twitter:image` stays
-  `preview.png` (1200×630) for the wide card. Regenerate both with
-  `node tools/make-preview.mjs`.
+  most desktop browsers), falling back to the clipboard. The link goes *inside* the shared text
+  rather than in a separate `url` field: several targets, WhatsApp among them, use only `url` and
+  silently drop `text` when both are present, which sent the bare link and none of the score.
 - **Installable** — a web manifest and an `apple-touch-icon`, so the game can be added to the
   Home Screen and opens without browser chrome. Icons are committed; regenerate them with
   `node tools/make-icons.mjs --source assets/icon-source.jpg`, which needs Playwright via `npx`
@@ -105,11 +106,11 @@ Hard mode is unaffected: its photo is never sent early.
 - **No accidental zoom** — the game blocks pinch-zoom where the platform allows it, and kills
   double-tap zoom and the iOS zoom-on-input everywhere. iOS Safari ignores the viewport flag by
   design, so the targeted fixes carry it there. The admin keeps normal zoom, being a desk tool.
-- **Link previews** — the result grid carries the site link, and the page has `og:`/`twitter:` tags so
-  a pasted link previews with `public/preview.png`. That image is a figure drawn for the purpose,
-  never a player in rotation, so sharing can't spoil a puzzle. The tags need an absolute URL and
-  scrapers don't run JavaScript, so `server/index.mjs` serves `/` through a substitution rather
-  than as a static file.
+- **Link previews** — a pasted link shows a plain text card: title, description and URL, with
+  **no image, deliberately**. `og:image`/`twitter:image` were tried and removed by request, so
+  don't reinstate them without asking. The remaining tags still need an absolute URL and scrapers
+  don't run JavaScript, so `server/index.mjs` serves `/` through a substitution rather than as a
+  static file.
 
 ## What people guessed
 
@@ -144,6 +145,20 @@ heavy black outlines with a hard offset shadow, Sansita for display and Mulish f
 loaded from Google Fonts. It is light-mode only and paints its own colours rather than following
 the viewer's system theme.
 
+## Tests
+
+```sh
+npm test
+```
+
+`node:test` and `node:assert`, both built into Node — there are no dev dependencies and nothing to
+install. They cover the pure logic where the fiddly bugs live: the fuzzy matcher's tolerance
+boundaries, the streak walk, date resolution, hint gating in both modes, upload handling, the login
+throttle, and the category migration run against a fixture built on the old schema.
+
+**Deploys are gated on this.** `.github/workflows/fly-deploy.yml` runs the suite first and only
+deploys if it passes, so a broken push stops at CI rather than at the Fly health check.
+
 ## Layout
 
 | Path | What it is |
@@ -152,9 +167,15 @@ the viewer's system theme.
 | `server/db.mjs` | SQLite schema and queries |
 | `server/game.mjs` | Round logic: scheduling, hint reveal, win/lose |
 | `server/matching.mjs` | Name normalisation and fuzzy matching |
-| `server/auth.mjs` | Signed admin and play-session cookies |
+| `server/hints.mjs` | The hint ladder, and sorting stored hints into it |
+| `server/auth.mjs` | Signed admin and play-session cookies, and the login throttle |
+| `server/uploads.mjs` | The uploaded-image directory: serving and deleting |
+| `server/storage.mjs` | Detects a non-persistent disk and warns loudly |
+| `server/request.mjs` | Reading the caller's timezone off a request |
+| `server/env.mjs` | Loads `.env` at startup |
 | `server/routes-game.mjs`, `server/routes-admin.mjs` | HTTP endpoints |
 | `server/seed.mjs` | Loads the three starter players |
+| `test/` | `npm test` — no dependencies, just `node:test` |
 | `public/` | The game the players see |
 | `admin/` | Admin UI, including the silhouette editor |
 
@@ -174,11 +195,21 @@ Public:
 Every endpoint above takes `?category=` (or `{ category }` in the body) — Premier League and
 International are separate games with their own schedule, plays and stats.
 
-Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
-/api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,
-`POST /api/admin/players/:id/silhouette`, `GET /api/admin/insights[?date=]`, `GET /api/admin/insights/dates`,
-`GET /api/admin/players/:id/photo`,
-`GET|PUT|DELETE /api/admin/schedule[/:date]`.
+Admin, all behind a signed cookie except `/login`, `/logout` and `/session`:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/admin/login` \| `/logout` | Sign in or out. Login is throttled per caller after six failures |
+| `GET /api/admin/session` | Whether you're signed in, plus the storage warning and hint labels |
+| `GET\|POST /api/admin/players` | List, or create from a name and images |
+| `PATCH\|DELETE /api/admin/players/:id` | Edit hints, aliases, category, traced silhouette, status — or remove |
+| `POST /api/admin/players/:id/images` | Replace the silhouette and/or the photo |
+| `GET /api/admin/players/:id/photo` \| `/silhouette-image` | The stored images, for review |
+| `GET\|PUT\|DELETE /api/admin/schedule[/:date]` | Read the queue, pin a player to a day, or clear one |
+| `GET /api/admin/insights[?date=]` | What was guessed that day. Read-only — it never assigns a player |
+| `GET /api/admin/insights/dates` | Days anyone has played |
+
+These take `?category=` too, defaulting to `international`.
 
 ## Deploying
 
