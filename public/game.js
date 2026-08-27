@@ -26,6 +26,9 @@ const dom = {
   sheet: el('sheet'),
   sheetTitle: el('sheet-title'),
   sheetBody: el('sheet-body'),
+  settingsTrigger: el('settings-trigger'),
+  settingsSheet: el('settings-sheet'),
+  settingsSummary: el('settings-summary'),
   modes: el('modes'),
   modeHard: el('mode-hard'),
   modeEasy: el('mode-easy'),
@@ -210,6 +213,13 @@ function renderModes() {
       : '';
 }
 
+/** The one line standing in for the two pill rows now tucked inside the settings sheet. */
+function renderSettingsSummary() {
+  const categoryLabel = category === 'premier-league' ? dom.categoryPL.textContent : dom.categoryIntl.textContent;
+  const modeLabel = (state?.mode ?? preferredMode()) === 'easy' ? dom.modeEasy.textContent : dom.modeHard.textContent;
+  dom.settingsSummary.textContent = `${categoryLabel} · ${modeLabel}`;
+}
+
 async function chooseMode(mode) {
   // No round on screen means nothing to set the difficulty of.
   if (!state || state.mode === mode) return;
@@ -360,6 +370,7 @@ let shownGuesses = 0;
 function render() {
   renderCategories();
   renderModes();
+  renderSettingsSummary();
   renderSilhouette();
   renderHints();
 
@@ -701,6 +712,7 @@ function showNoRound(message) {
   dom.modeHard.disabled = true;
   dom.modeEasy.disabled = true;
   renderCategories();
+  renderSettingsSummary();
 }
 
 async function openRound(date) {
@@ -779,6 +791,7 @@ async function init() {
   dom.categoryIntl.addEventListener('click', () => chooseCategory('international'));
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
+  dom.settingsTrigger.addEventListener('click', () => dom.settingsSheet.showModal());
   setInterval(renderCountdown, 30000);
 
   await openRound(null);

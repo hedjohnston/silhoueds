@@ -37,18 +37,14 @@
       <h1 class="logo">Silhoueds</h1>
       <p class="tagline">Name the footballer from their shadow.</p>
       <p class="date" id="puzzle-date"></p>
+      <!-- Which puzzle and which mode used to be two pill rows sitting between the masthead and
+           the puzzle — set once a round and then just spending height. A tap-in-once-a-round
+           setting doesn't need to stay on screen; the summary line does the same job in one row
+           and the controls themselves moved into the sheet below. -->
+      <button class="link settings-trigger" id="settings-trigger" type="button">
+        <span id="settings-summary"></span>
+      </button>
     </header>
-
-    <div class="modes" id="categories" role="group" aria-label="Category">
-      <button class="mode" id="category-pl" type="button" data-category="premier-league" aria-pressed="false">Premier League</button>
-      <button class="mode" id="category-intl" type="button" data-category="international" aria-pressed="true">The Rest</button>
-    </div>
-
-    <div class="modes" id="modes" role="group" aria-label="Difficulty">
-      <button class="mode" id="mode-hard" type="button" data-mode="hard" aria-pressed="true">Hard</button>
-      <button class="mode" id="mode-easy" type="button" data-mode="easy" aria-pressed="false">Easy</button>
-    </div>
-    <p class="mode-note" id="mode-note"></p>
 
     <!-- The art and the input are the two things you need at the same time; the hints and the
          transcript between them are reference that grows by a row per guess. Each is docked so
@@ -153,6 +149,25 @@
       <form method="dialog" class="sheet-close"><button aria-label="Close">✕</button></form>
       <h2 class="sheet-title" id="sheet-title"></h2>
       <div id="sheet-body"></div>
+    </dialog>
+
+    <!-- A separate dialog rather than the generic one above: showStats/showArchive empty and
+         refill #sheet-body from scratch on every open, which would tear down these buttons and
+         the listeners game.js already attached to them once at init. -->
+    <dialog class="sheet" id="settings-sheet">
+      <form method="dialog" class="sheet-close"><button aria-label="Close">✕</button></form>
+      <h2 class="sheet-title">Puzzle settings</h2>
+
+      <div class="modes" id="categories" role="group" aria-label="Category">
+        <button class="mode" id="category-pl" type="button" data-category="premier-league" aria-pressed="false">Premier League</button>
+        <button class="mode" id="category-intl" type="button" data-category="international" aria-pressed="true">The Rest</button>
+      </div>
+
+      <div class="modes" id="modes" role="group" aria-label="Difficulty">
+        <button class="mode" id="mode-hard" type="button" data-mode="hard" aria-pressed="true">Hard</button>
+        <button class="mode" id="mode-easy" type="button" data-mode="easy" aria-pressed="false">Easy</button>
+      </div>
+      <p class="mode-note" id="mode-note"></p>
     </dialog>
   </main>
 
