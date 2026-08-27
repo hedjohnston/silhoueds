@@ -26,24 +26,58 @@ export const MODES = ['hard', 'easy'];
 // so daylight saving is handled for us. Override with SILHOUEDS_TIMEZONE.
 const DEFAULT_TIMEZONE = process.env.SILHOUEDS_TIMEZONE ?? 'Australia/Sydney';
 
+/** The calendar date in one zone. Throws on a zone Intl doesn't recognise. */
+function keyIn(now, timeZone) {
+  // en-CA formats as YYYY-MM-DD, which is the key format we want.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+const DAY_MS = 86400000;
+const shiftKey = (key, days) =>
+  new Date(Date.parse(`${key}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+
 /**
  * The date key a puzzle is filed under, in the given zone.
  *
- * Players roll over at their own local midnight, so the zone comes from the browser. An unknown
- * or malformed zone falls back rather than throwing.
+ * Players roll over at their own local midnight, so the zone comes from the browser — which means
+ * it is caller-controlled and has to be treated as a claim rather than a fact.
+ *
+ * Two guards:
+ *
+ * A zone Intl can't parse falls back to the configured default, not to UTC. The old fallback
+ * meant a garbled zone quietly filed the round a day out from where a missing one would.
+ *
+ * The result is then clamped to within a day of the server's own date. Real zones span UTC-12 to
+ * UTC+14, so no genuine visitor is ever more than one calendar day from the server and none of
+ * them notice this. What it stops is a caller naming an extreme offset — Intl accepts them up to
+ * ±18:00 — to reach a date no real zone is on yet. That matters because resolving a date also
+ * auto-assigns its player, so reading ahead would both spoil the puzzle and permanently spend
+ * someone out of the pool.
  */
 export function todayKey(now = new Date(), timeZone = DEFAULT_TIMEZONE) {
+  let server;
   try {
-    // en-CA formats as YYYY-MM-DD, which is the key format we want.
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now);
+    server = keyIn(now, DEFAULT_TIMEZONE);
   } catch {
-    return now.toISOString().slice(0, 10);
+    // A misconfigured SILHOUEDS_TIMEZONE shouldn't take the game down.
+    server = now.toISOString().slice(0, 10);
   }
+
+  let key;
+  try {
+    key = keyIn(now, timeZone);
+  } catch {
+    return server;
+  }
+
+  if (key > shiftKey(server, 1)) return shiftKey(server, 1);
+  if (key < shiftKey(server, -1)) return shiftKey(server, -1);
+  return key;
 }
 
 /**

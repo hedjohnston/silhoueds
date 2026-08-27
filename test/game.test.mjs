@@ -68,9 +68,44 @@ test('todayKey formats as YYYY-MM-DD in the given zone', () => {
   assert.equal(todayKey(noon, 'UTC'), '2026-08-27');
 });
 
-test('todayKey falls back rather than throwing on a nonsense zone', () => {
-  const key = todayKey(new Date('2026-08-27T02:00:00Z'), 'Mars/Phobos');
-  assert.match(key, /^\d{4}-\d{2}-\d{2}$/);
+test('an unparseable zone falls back to the configured default, not to UTC', () => {
+  // 20:00Z is already the 27th in Sydney but still the 26th in UTC, so the two disagree and the
+  // fallback is observable. Falling back to UTC filed the round a day out from where a missing
+  // zone would have put it.
+  const now = new Date('2026-08-26T20:00:00Z');
+  assert.equal(todayKey(now, 'Australia/Sydney'), '2026-08-27');
+  assert.equal(todayKey(now, 'Mars/Phobos'), '2026-08-27');
+  assert.equal(todayKey(now, ''), '2026-08-27');
+});
+
+test('every real timezone is honoured exactly — the clamp never touches one', () => {
+  // The zone is caller-supplied, so the result is bounded; that bound must be wide enough that no
+  // genuine visitor anywhere ever notices it.
+  const now = new Date('2026-08-27T02:00:00Z');
+  const unclamped = (zone) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(now);
+
+  const zones = Intl.supportedValuesOf('timeZone');
+  assert.ok(zones.length > 300, 'expected a full zone list to test against');
+  for (const zone of zones) {
+    assert.equal(todayKey(now, zone), unclamped(zone), `${zone} was altered`);
+  }
+});
+
+test('a claimed zone cannot reach further than a day from the server', () => {
+  // Intl accepts offsets out to ±18:00, beyond any real zone. Resolving a date also auto-assigns
+  // that day's player, so an unbounded claim would spend players from the pool ahead of time.
+  const now = new Date('2026-08-27T12:00:00Z');
+  const server = todayKey(now, 'Australia/Sydney');
+  const day = 86400000;
+  const distance = (key) =>
+    Math.abs(Date.parse(`${key}T00:00:00Z`) - Date.parse(`${server}T00:00:00Z`)) / day;
+
+  for (const claim of ['+18:00', '-18:00', '+14:00', '-12:00', 'UTC']) {
+    assert.ok(distance(todayKey(now, claim)) <= 1, `${claim} reached too far`);
+  }
 });
 
 // --- resolveRoundDate ----------------------------------------------------
