@@ -241,6 +241,22 @@ body {
   font-size: 14px;
 }
 
+/* Easy mode holds the whole ladder back behind a button, so glancing at the page can't spoil a
+   round the player meant to take on hard. Sits inside the card, so it inherits the clipped radius. */
+.hint-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  text-align: center;
+}
+
+.hint-cover-note { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* Not .ghost: that is full-width and white, which would vanish against the white card. */
+.hint-reveal { padding: 10px 22px; background: var(--blue); font-size: 15px; }
+
 /* --- guesses --- */
 
 .history { display: flex; flex-direction: column; gap: 8px; }

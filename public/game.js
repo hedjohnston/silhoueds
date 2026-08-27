@@ -35,8 +35,12 @@ const dom = {
 
 const MODE_KEY = 'silhoueds:mode';
 const CATEGORY_KEY = 'silhoueds:category';
+const REVEALED_KEY = 'silhoueds:hints-revealed';
 const CATEGORIES = ['premier-league', 'international'];
 const DEFAULT_CATEGORY = 'international';
+
+// How many rounds' reveal decisions to remember. Old ones age out rather than growing forever.
+const REVEALED_CAP = 60;
 
 function preferredMode() {
   try {
@@ -69,6 +73,42 @@ function rememberCategory(category) {
   } catch {
     // Private window or storage blocked — the tab just won't be remembered next visit.
   }
+}
+
+/**
+ * Rounds whose hints the player has chosen to uncover, as "category:date" ids.
+ *
+ * Easy mode hands over the whole ladder at once, so the panel stays covered until it is asked for
+ * — otherwise a player who meant to play hard has read every hint before they reach the toggle.
+ * Remembered per round so a mid-round reload doesn't hide what was deliberately revealed. Anything
+ * unreadable just means the cover comes back, which is the safe direction to fail in.
+ */
+function readRevealedRounds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(REVEALED_KEY) ?? '[]');
+    return Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+let revealedRounds = readRevealedRounds();
+
+const roundId = (round) => `${round.category}:${round.date}`;
+
+function rememberRevealed(id) {
+  if (revealedRounds.includes(id)) return;
+  revealedRounds = [...revealedRounds, id].slice(-REVEALED_CAP);
+  try {
+    localStorage.setItem(REVEALED_KEY, JSON.stringify(revealedRounds));
+  } catch {
+    // Storage blocked — the hints stay revealed for this page, just not the next one.
+  }
+}
+
+/** Easy mode hides the ladder behind a button; hard mode only ever holds earned hints. */
+function hintsCovered() {
+  return state.mode === 'easy' && !state.finished && !revealedRounds.includes(roundId(state));
 }
 
 // Premier League and International are two independent daily games — switching just opens the
@@ -201,7 +241,8 @@ function renderModes() {
 }
 
 async function chooseMode(mode) {
-  if (state.mode === mode) return;
+  // No round on screen means nothing to set the difficulty of.
+  if (!state || state.mode === mode) return;
   rememberMode(mode);
   try {
     state = await api('/api/mode', { method: 'POST', body: JSON.stringify({ mode }) });
@@ -233,6 +274,32 @@ function renderHints() {
   count.className = 'hint-count';
   count.textContent = `${state.hints.length} of ${state.hintsTotal ?? state.hints.length}`;
   head.append(title, count);
+
+  // Covered: keep the card and its count, but leave the values out of the DOM entirely rather
+  // than hiding them in CSS — #hints is an aria-live region, so a hidden hint would still be read
+  // aloud, and would still be selectable and visible in devtools.
+  if (hintsCovered()) {
+    const cover = document.createElement('div');
+    cover.className = 'hint-cover';
+
+    const note = document.createElement('p');
+    note.className = 'hint-cover-note';
+    note.textContent = 'Easy mode gives you every hint. Reveal them when you want them.';
+
+    const reveal = document.createElement('button');
+    reveal.className = 'hint-reveal';
+    reveal.type = 'button';
+    reveal.textContent = 'Reveal hints';
+    reveal.onclick = () => {
+      rememberRevealed(roundId(state));
+      renderHints();
+    };
+
+    cover.append(note, reveal);
+    card.append(head, cover);
+    dom.hints.append(card);
+    return;
+  }
 
   const list = document.createElement('ol');
   list.className = 'hint-rows';
@@ -311,7 +378,8 @@ function notify(message) {
 }
 
 async function send(path, body) {
-  if (busy || state?.finished) return;
+  // `!state` covers the no-round case, where the finally below would read state.finished.
+  if (busy || !state || state.finished) return;
   busy = true;
   dom.input.disabled = true;
   try {
@@ -519,6 +587,9 @@ async function copyToClipboard() {
  * separate `url` field meant the score never reached the recipient — only the bare link did.
  */
 async function share() {
+  // The buttons live inside the hidden result box when there's no round, but the listeners are
+  // attached before the first load now, so don't rely on that alone.
+  if (!state) return;
   const payload = { title: 'Silhoueds', text: shareText() };
 
   if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
@@ -536,18 +607,48 @@ async function share() {
   await copyToClipboard();
 }
 
+/**
+ * Show that there is no round to play, and clear the last one off the screen.
+ *
+ * Without this the previous round's silhouette, hints and guesses stayed put under the new tab —
+ * so switching to a category with no puzzle read as if that category were showing yesterday's
+ * player. The message goes in the stage, where the puzzle would have been.
+ */
+function showNoRound(message) {
+  state = null;
+  notify('');
+
+  document.body.dataset.error = 'true';
+  dom.silhouette.dataset.rendered = '';
+  dom.silhouette.textContent = message;
+
+  dom.hints.innerHTML = '';
+  dom.history.innerHTML = '';
+  dom.puzzleDate.textContent = '';
+  dom.modeNote.textContent = '';
+
+  dom.guessesLeft.hidden = true;
+  dom.form.hidden = true;
+  dom.skip.hidden = true;
+  dom.result.hidden = true;
+
+  // The category tabs stay live so the player can get back to one that has a puzzle.
+  dom.modeHard.disabled = true;
+  dom.modeEasy.disabled = true;
+  renderCategories();
+}
+
 async function openRound(date) {
   viewingDate = date;
   notify('');
   try {
     state = await api('/api/puzzle');
   } catch (error) {
-    notify(error.message);
-    dom.form.hidden = true;
-    dom.skip.hidden = true;
+    showNoRound(error.message);
     return;
   }
 
+  delete document.body.dataset.error;
   dom.puzzleDate.textContent = new Date(`${state.date}T00:00:00Z`).toLocaleDateString(undefined, {
     dateStyle: 'long',
     timeZone: 'UTC',
@@ -568,9 +669,8 @@ async function openRound(date) {
 }
 
 async function init() {
-  await openRound(null);
-  if (!state) return;
-
+  // Wired before the first load, not after: when that load fails there is still a page to drive,
+  // and the category tabs are the only way back to one that has a puzzle.
   dom.form.addEventListener('submit', (event) => {
     event.preventDefault();
     const guess = dom.input.value.trim();
@@ -585,6 +685,8 @@ async function init() {
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
   setInterval(renderCountdown, 30000);
+
+  await openRound(null);
 }
 
 init();
