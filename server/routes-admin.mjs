@@ -10,7 +10,7 @@ import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmi
 import { HINT_LABELS } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
-import { todayKey, hasArtwork, playerForDate, normalizeCategory } from './game.mjs';
+import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
 import { closeness } from './matching.mjs';
 
 /** Which of the two daily games this request concerns. */
@@ -252,7 +252,11 @@ adminRouter.get('/insights', (req, res) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date ?? '')
     ? req.query.date
     : todayKey(new Date(), zoneOf(req));
-  const player = playerForDate(date, category);
+  // schedule.get, never playerForDate: the latter falls through to auto-assignment, which writes
+  // a schedule row. Reading the guess log for a day nobody played — or for a future date, which
+  // the format check alone allows — would then allocate a ready player to it permanently, and the
+  // schedule picker excludes anyone already scheduled. Simply looking would eat the pool.
+  const player = schedule.get(date, category);
   const rounds = plays.forDate(date, category);
 
   let solved = 0;
