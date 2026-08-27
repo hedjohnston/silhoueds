@@ -86,13 +86,18 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .topbar a { color: var(--muted); font-weight: 700; }
 
 .panel { background: var(--panel); border: 3px solid var(--edge); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
-.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel-head select { min-width: 0; max-width: 100%; }
 /* Pushes the counts up against the heading it belongs to, leaving actions on the right. */
 .counts { color: var(--muted); font-size: 14px; margin: 0 auto 0 0; }
 
 .add-form, .schedule-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
-.field { display: flex; flex-direction: column; gap: 5px; }
+/* min-width: 0, or a flex item is never allowed below its intrinsic width — and a file input's
+   intrinsic width is wider than a phone. The admin is used one-handed on a phone as often as not,
+   and a card that scrolls sideways hides the very control being reached for. */
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; max-width: 100%; }
 .field label { font-size: 13px; color: var(--muted); }
+.field input, .field select { max-width: 100%; }
 
 /* --- player cards --- */
 
@@ -106,9 +111,11 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
 .player summary {
   display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; padding: 4px 0;
+  flex-wrap: wrap;
 }
 .player summary::-webkit-details-marker { display: none; }
-.player summary h3 { flex: 1; }
+/* The chips wrap under the name on a narrow screen rather than running off the card. */
+.player summary h3 { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
 .chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 2px solid var(--edge); white-space: nowrap; background: #fff; }
 .chip-ready { background: var(--ok); }
@@ -202,6 +209,10 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   background: var(--panel);
   color: var(--ink);
   padding: 18px;
+  /* The dialog scrolls itself rather than growing the page behind it. Without this it stood
+     taller than the screen and Save silhouette sat below the fold with no scrollbar of its own. */
+  max-height: 92vh;
+  overflow-y: auto;
 }
 .tracer::backdrop { background: rgb(0 0 0 / 0.7); }
 .tracer-close { display: flex; justify-content: flex-end; }
@@ -232,6 +243,19 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
 .tracer-controls { display: flex; flex-direction: column; gap: 8px; }
 .tracer-controls label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+
+/* Phones. The tracer gives up stage and preview height so its controls stay on screen, and the
+   silhouette thumbnail shrinks so a player card's fields aren't squeezed into a narrow column. */
+@media (max-width: 640px) {
+  .tracer-stage { max-height: 36vh; }
+  /* Save and Undo come before the preview here: stacked, they would otherwise sit below both the
+     stage and a preview box, which is a long reach from the outline you just drew. */
+  .tracer-controls { order: -1; }
+  .preview-box { height: 110px; }
+  .preview-box svg { height: 96px; }
+  .player-art { flex: 0 0 78px; height: 116px; }
+  .player-art svg, .player-art img { height: 100px; }
+}
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
