@@ -107,6 +107,35 @@ function buildArt(player, { small = false } = {}) {
   return art;
 }
 
+/**
+ * What easy mode opens on: the reveal photo flattened to `brightness(0)`.
+ *
+ * Easy mode fills this shape in a step at a time rather than sharpening a blur, which works
+ * because the photo is a background-removed cut-out — its own alpha is the silhouette. That makes
+ * this preview the one place the failure is visible: a photo uploaded *without* a transparent
+ * background flattens to a black rectangle rather than a figure, and the round would give the game
+ * away on sight. Better to catch it here than on the day it runs.
+ */
+function buildEasyOpening(player) {
+  if (!player.photo) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'player-art player-art-opening';
+
+  const image = document.createElement('img');
+  image.src = `/api/admin/players/${player.id}/photo`;
+  image.alt = '';
+  // The same filter game.js applies at step 0, so this is the player's actual first frame.
+  image.style.filter = 'brightness(0)';
+
+  const caption = document.createElement('span');
+  caption.className = 'art-caption';
+  caption.textContent = 'easy opens here';
+
+  wrap.append(image, caption);
+  return wrap;
+}
+
 /** The dropdown entry that swaps in a field for naming a category of your own. */
 const WRITE_MY_OWN = '\u0000write-my-own';
 
@@ -439,7 +468,8 @@ function renderPlayers() {
 
     actions.append(replace, trace, save, publish, archive, remove);
     details.append(hintEditor.list, hintEditor.caption, aliasLabel, categoryLabelField, actions);
-    body.append(art, details);
+    const opening = buildEasyOpening(player);
+    body.append(art, ...(opening ? [opening] : []), details);
     card.append(summary, body);
     dom.players.append(card);
   }

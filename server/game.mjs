@@ -14,9 +14,25 @@ export function normalizeCategory(requested) {
 
 export const MAX_GUESSES = 6;
 
-// Easy mode starts here and sharpens with every hint. It never reaches zero while the round is
-// live — the last hint should still leave something to guess at.
-const START_BLUR = 34;
+// Easy mode fills the silhouette in rather than sharpening a blur: the shape never changes, only
+// what is inside it resolves. Step 0 is `brightness(0)`, which on an alpha cut-out photo is an
+// exact ink silhouette — so easy mode opens looking identical to hard mode and diverges from
+// there. Colour arrives late, because the kit is a real clue and should not be free.
+//
+// Indexed by misses, so the ladder is keyed to MAX_GUESSES rather than to how many hints the
+// player happens to carry. The blur this replaced divided by the hint count, which meant anyone
+// with four or fewer hints went fully sharp with guesses still in hand.
+const FILL_STEPS = [
+  { brightness: 0.0, contrast: 1.0, saturate: 0.0 },
+  { brightness: 0.3, contrast: 2.2, saturate: 0.05 },
+  { brightness: 0.46, contrast: 1.8, saturate: 0.15 },
+  { brightness: 0.6, contrast: 1.5, saturate: 0.3 },
+  { brightness: 0.72, contrast: 1.3, saturate: 0.5 },
+  { brightness: 0.86, contrast: 1.12, saturate: 0.75 },
+];
+
+/** The unfiltered photograph, once there is nothing left to hold back. */
+const FULL_FILL = { brightness: 1, contrast: 1, saturate: 1 };
 
 export const MODES = ['hard', 'easy'];
 
@@ -132,16 +148,9 @@ function previousDay(date) {
   return new Date(stamp).toISOString().slice(0, 10);
 }
 
-/**
- * A visitor's record, from their own finished rounds.
- *
- * The streak walks back a day at a time from today, so it stays consistent with the per-player
- * rollover: a day you didn't play breaks it, and today not being played yet does not.
- */
-export function statsFor(sessionId, today, category) {
-  const history = plays.history(sessionId, category);
-  const played = history.length;
-  const wins = history.filter((round) => round.won);
+/** Played, won, win rate and the guess distribution over one set of finished rounds. */
+function tally(rounds) {
+  const wins = rounds.filter((round) => round.won);
 
   const distribution = {};
   for (let n = 1; n <= MAX_GUESSES; n++) distribution[n] = 0;
@@ -149,6 +158,30 @@ export function statsFor(sessionId, today, category) {
     const used = round.guesses.length;
     if (distribution[used] !== undefined) distribution[used]++;
   }
+
+  return {
+    played: rounds.length,
+    won: wins.length,
+    winRate: rounds.length === 0 ? 0 : Math.round((wins.length / rounds.length) * 100),
+    distribution,
+  };
+}
+
+/**
+ * A visitor's record, from their own finished rounds.
+ *
+ * The streak walks back a day at a time from today, so it stays consistent with the per-player
+ * rollover: a day you didn't play breaks it, and today not being played yet does not.
+ *
+ * The streak deliberately spans both modes. Splitting it would punish the player who sizes up
+ * today's silhouette and picks a mode accordingly, which is exactly the engagement worth having —
+ * so the difficulty shows up in `byMode` and `hardWins` instead, where choosing hard is visibly
+ * worth something without the easy day costing you a run.
+ */
+export function statsFor(sessionId, today, category) {
+  const history = plays.history(sessionId, category);
+  const overall = tally(history);
+  const wins = history.filter((round) => round.won);
 
   const wonDates = new Set(wins.map((round) => round.date));
   const playedDates = new Set(history.map((round) => round.date));
@@ -172,13 +205,15 @@ export function statsFor(sessionId, today, category) {
   }
 
   return {
-    played,
-    won: wins.length,
-    winRate: played === 0 ? 0 : Math.round((wins.length / played) * 100),
+    ...overall,
     currentStreak,
     bestStreak,
-    distribution,
     maxGuesses: MAX_GUESSES,
+    byMode: {
+      hard: tally(history.filter((round) => round.mode !== 'easy')),
+      easy: tally(history.filter((round) => round.mode === 'easy')),
+    },
+    hardWins: wins.filter((round) => round.mode !== 'easy').length,
   };
 }
 
@@ -187,29 +222,35 @@ function nextDay(date) {
 }
 
 /**
- * Hints earned so far — one per wrong guess or skip in hard mode. Easy mode shows the whole
- * ladder from the start instead: the photo is already doing the progressive reveal there, so
- * gating the text hints too would just be hiding help the round doesn't need hidden. Once the
- * round is over, hidden hints have nothing left to protect — a win on the second guess should
- * still show what the other four would have given away, not leave the panel looking unfinished.
+ * Hints earned so far — one per wrong guess or skip, in both modes. Easy mode used to hand over
+ * the whole ladder at once on the grounds that the photo was already revealing progressively; that
+ * made easy mode two assists rather than one, and left hard mode offering the same reward for
+ * strictly less information. The modes now differ on one axis only — whether the silhouette fills
+ * in — and share this ladder. Once the round is over, hidden hints have nothing left to protect: a
+ * win on the second guess should still show what the other four would have given away, not leave
+ * the panel looking unfinished.
  *
  * `playableHints` rather than the stored order: players saved before the ladder changed still hold
  * the old sequence, the admin allows hand editing, and a category the player's game has no use for
  * (the league of a Premier League player) is dropped rather than revealed.
  */
-function revealedHints(player, guesses, easy, finished) {
+function revealedHints(player, guesses, finished) {
   const ordered = playableHints(player);
-  if (easy || finished) return ordered;
+  if (finished) return ordered;
   const misses = guesses.filter((g) => !g.correct).length;
   return ordered.slice(0, Math.min(misses, ordered.length));
 }
 
-/** How blurred the photo should be, given how many guesses (or skips) have been spent. */
-function blurFor(player, guesses, finished) {
-  if (finished) return 0;
+/**
+ * How far the silhouette has filled in, given how many guesses (or skips) have been spent.
+ *
+ * A sixth miss ends the round, so a live round never reaches past the last step — the figure is
+ * never fully resolved while there is still something to guess at.
+ */
+function fillFor(guesses, finished) {
+  if (finished) return FULL_FILL;
   const misses = guesses.filter((g) => !g.correct).length;
-  const rungs = (playableHints(player).length || 1) + 1;
-  return Math.round(START_BLUR * (1 - Math.min(misses, rungs) / rungs));
+  return FILL_STEPS[Math.min(misses, FILL_STEPS.length - 1)];
 }
 
 /** What the browser is allowed to know about the current round. */
@@ -223,9 +264,10 @@ export function publicState(player, play) {
   return {
     mode: easy ? 'easy' : 'hard',
     easyAvailable,
-    // In easy mode the photo stands in for the silhouette from the start, blurred.
+    // In easy mode the photo stands in for the silhouette from the start, filtered down to a
+    // flat ink shape and resolving from there.
     photoUrl: easy && !finished ? '/api/puzzle/reveal' : null,
-    blur: easy ? blurFor(player, guesses, finished) : 0,
+    fill: easy ? fillFor(guesses, finished) : null,
     date: play?.date,
     category: player.category,
     // Uploaded artwork is served through the API; a traced outline is inlined as SVG.
@@ -233,7 +275,7 @@ export function publicState(player, play) {
     silhouette: player.silhouette_image ? null : player.silhouette,
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
-    hints: revealedHints(player, guesses, easy, finished),
+    hints: revealedHints(player, guesses, finished),
     // How many exist in total, so the panel can show how much help is left.
     hintsTotal: playableHints(player).length,
     guesses: guesses.map((g) => ({ name: g.name, correct: g.correct, skipped: g.skipped })),

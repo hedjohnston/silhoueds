@@ -210,12 +210,17 @@ test('a finished round shows every hint after a loss too, not just the ones the 
   assert.deepEqual(finished.hints.map((h) => h.label), HINTS.map((h) => h.label));
 });
 
-test('easy mode shows the whole ladder from the first moment', () => {
+test('easy mode earns its hints on the same ladder as hard', () => {
+  // Easy mode used to hand over the whole ladder at once. That made it two assists rather than
+  // one and left hard mode strictly worse off, so the modes now differ only in whether the
+  // silhouette fills in.
   const player = { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
-  const state = publicState(player, { date: '2026-08-27', guesses: [], mode: 'easy' });
+  const at = (guesses) =>
+    publicState(player, { date: '2026-08-27', guesses, mode: 'easy' }).hints.map((h) => h.label);
 
-  assert.equal(state.mode, 'easy');
-  assert.deepEqual(state.hints.map((h) => h.label), ['Era', 'Position', 'League']);
+  assert.deepEqual(at([]), []);
+  assert.deepEqual(at([guess('a')]), ['Era']);
+  assert.deepEqual(at([guess('a'), skip()]), ['Era', 'Position']);
 });
 
 test('easy mode falls back to hard when there is no photo to reveal', () => {
@@ -224,7 +229,7 @@ test('easy mode falls back to hard when there is no photo to reveal', () => {
 
   assert.equal(state.easyAvailable, false);
   assert.equal(state.mode, 'hard');
-  assert.deepEqual(state.hints, []); // and so it gates the hints again
+  assert.deepEqual(state.hints, []); // hints are earned in both modes, so none yet
 });
 
 test('hints come out in the order the slots were arranged, not sorted', () => {
@@ -232,42 +237,104 @@ test('hints come out in the order the slots were arranged, not sorted', () => {
   // first is revealed first. Nothing re-sorts it on the way out.
   const arranged = [HINTS[2], HINTS[0], HINTS[1]];
   const player = { name: 'X', hints: arranged, reveal_image: 'r.png', silhouette: '<svg/>' };
-  const state = publicState(player, { date: '2026-08-27', guesses: [], mode: 'easy' });
+  // A finished round holds the whole ladder, which is where the order is visible in one go.
+  const state = publicState(player, { date: '2026-08-27', guesses: [], mode: 'easy', finished: true });
   assert.deepEqual(state.hints.map((h) => h.label), ['League', 'Era', 'Position']);
 });
 
-test('the blur clears as guesses are spent, and is gone once the round ends', () => {
+/** The easy-mode fill after `misses` wrong guesses, for a player carrying `hintCount` hints. */
+const fillAfter = (misses, hintCount = HINTS.length, finished = false) =>
+  publicState(
+    { name: 'X', hints: HINTS.slice(0, hintCount), reveal_image: 'r.png', silhouette: '<svg/>' },
+    {
+      date: '2026-08-27',
+      guesses: Array.from({ length: misses }, () => guess('wrong')),
+      mode: 'easy',
+      finished,
+    },
+  ).fill;
+
+test('the fill starts as a flat ink silhouette', () => {
+  // brightness(0) on a background-removed photo is exactly the shape hard mode shows, which is
+  // the whole point: easy mode opens looking identical and diverges from there.
+  assert.equal(fillAfter(0).brightness, 0);
+  assert.equal(fillAfter(0).saturate, 0);
+});
+
+test('the fill resolves as guesses are spent, and is complete once the round ends', () => {
+  assert.ok(fillAfter(1).brightness > fillAfter(0).brightness);
+  assert.ok(fillAfter(2).brightness > fillAfter(1).brightness);
+  assert.deepEqual(fillAfter(1, HINTS.length, true), { brightness: 1, contrast: 1, saturate: 1 });
+});
+
+test('colour arrives later than light, so the kit is never a free clue', () => {
+  // Saturation trails brightness at every live step: shape first, then detail, then colour.
+  for (let misses = 1; misses < MAX_GUESSES; misses++) {
+    const { brightness, saturate } = fillAfter(misses);
+    assert.ok(saturate < brightness, `saturate should trail brightness at ${misses} misses`);
+  }
+});
+
+test('a live round never fully resolves, at any hint count', () => {
+  // The regression this replaces: the old blur divided by the number of hints rather than by
+  // MAX_GUESSES, so a player carrying four or fewer went completely sharp with guesses still in
+  // hand — handing over the answer for free.
+  for (let hintCount = 0; hintCount <= HINTS.length; hintCount++) {
+    for (let misses = 0; misses <= MAX_GUESSES; misses++) {
+      const fill = fillAfter(misses, hintCount);
+      assert.ok(
+        fill.brightness < 1,
+        `a live round with ${hintCount} hints resolved after ${misses} misses`,
+      );
+    }
+  }
+});
+
+test('hard mode is never given a fill at all', () => {
   const player = { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
-  const blurAt = (guesses, finished = false) =>
-    publicState(player, { date: '2026-08-27', guesses, mode: 'easy', finished }).blur;
-
-  const start = blurAt([]);
-  assert.ok(start > 0);
-  assert.ok(blurAt([guess('a')]) < start);
-  assert.ok(blurAt([guess('a'), guess('b')]) < blurAt([guess('a')]));
-  assert.equal(blurAt([guess('a', true)], true), 0);
-});
-
-test('the blur never goes negative, however many guesses are spent', () => {
-  const player = { name: 'X', hints: [HINTS[0]], reveal_image: 'r.png', silhouette: '<svg/>' };
-  const guesses = Array.from({ length: MAX_GUESSES }, () => guess('wrong'));
-  assert.ok(publicState(player, { date: '2026-08-27', guesses, mode: 'easy' }).blur >= 0);
-});
-
-test('a player with no hints at all does not divide by zero', () => {
-  const player = { name: 'X', hints: [], reveal_image: 'r.png', silhouette: '<svg/>' };
-  const state = publicState(player, { date: '2026-08-27', guesses: [guess('a')], mode: 'easy' });
-  assert.ok(Number.isFinite(state.blur));
+  const state = publicState(player, { date: '2026-08-27', guesses: [guess('a')], mode: 'hard' });
+  assert.equal(state.fill, null);
+  assert.equal(state.photoUrl, null);
 });
 
 // --- statsFor ------------------------------------------------------------
 
 /** Record a finished round for `session` on `date`, won or lost, using `used` guesses. */
-function record(session, date, { won, used = 1, category = 'international' }) {
+function record(session, date, { won, used = 1, category = 'international', mode = 'hard' }) {
   const guesses = Array.from({ length: used }, (_, i) =>
     guess('g', won && i === used - 1));
-  plays.save(session, date, category, { guesses, finished: true, won, mode: 'hard' });
+  plays.save(session, date, category, { guesses, finished: true, won, mode });
 }
+
+test('the record splits by mode, but the streak spans both', () => {
+  // Splitting the streak too would punish the player who sizes up the silhouette and picks a mode
+  // to suit it. The difficulty shows up in byMode and hardWins instead, so taking hard on is worth
+  // something without an easy day costing a run.
+  const session = 'mode-split';
+  record(session, '2026-08-24', { won: true, used: 2, mode: 'hard' });
+  record(session, '2026-08-25', { won: true, used: 3, mode: 'easy' });
+  record(session, '2026-08-26', { won: false, used: 6, mode: 'easy' });
+  record(session, '2026-08-27', { won: true, used: 1, mode: 'hard' });
+
+  const stats = statsFor(session, '2026-08-27', 'international');
+
+  assert.equal(stats.played, 4);
+  assert.equal(stats.won, 3);
+  assert.equal(stats.currentStreak, 1); // 26th was lost, so only today survives
+  assert.equal(stats.bestStreak, 2); // 24th and 25th, spanning a hard day and an easy one
+
+  assert.equal(stats.byMode.hard.played, 2);
+  assert.equal(stats.byMode.hard.won, 2);
+  assert.equal(stats.byMode.hard.winRate, 100);
+  assert.equal(stats.byMode.easy.played, 2);
+  assert.equal(stats.byMode.easy.won, 1);
+  assert.equal(stats.byMode.easy.winRate, 50);
+  assert.equal(stats.hardWins, 2);
+
+  // The distributions are per mode too, not the overall one repeated.
+  assert.equal(stats.byMode.hard.distribution[1], 1);
+  assert.equal(stats.byMode.easy.distribution[3], 1);
+});
 
 test('a fresh visitor has an empty record rather than NaN', () => {
   const stats = statsFor('nobody', '2026-08-27', 'international');

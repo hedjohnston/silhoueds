@@ -35,12 +35,8 @@ const dom = {
 
 const MODE_KEY = 'silhoueds:mode';
 const CATEGORY_KEY = 'silhoueds:category';
-const REVEALED_KEY = 'silhoueds:hints-revealed';
 const CATEGORIES = ['premier-league', 'international'];
 const DEFAULT_CATEGORY = 'international';
-
-// How many rounds' reveal decisions to remember. Old ones age out rather than growing forever.
-const REVEALED_CAP = 60;
 
 function preferredMode() {
   try {
@@ -73,42 +69,6 @@ function rememberCategory(category) {
   } catch {
     // Private window or storage blocked — the tab just won't be remembered next visit.
   }
-}
-
-/**
- * Rounds whose hints the player has chosen to uncover, as "category:date" ids.
- *
- * Easy mode hands over the whole ladder at once, so the panel stays covered until it is asked for
- * — otherwise a player who meant to play hard has read every hint before they reach the toggle.
- * Remembered per round so a mid-round reload doesn't hide what was deliberately revealed. Anything
- * unreadable just means the cover comes back, which is the safe direction to fail in.
- */
-function readRevealedRounds() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(REVEALED_KEY) ?? '[]');
-    return Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-let revealedRounds = readRevealedRounds();
-
-const roundId = (round) => `${round.category}:${round.date}`;
-
-function rememberRevealed(id) {
-  if (revealedRounds.includes(id)) return;
-  revealedRounds = [...revealedRounds, id].slice(-REVEALED_CAP);
-  try {
-    localStorage.setItem(REVEALED_KEY, JSON.stringify(revealedRounds));
-  } catch {
-    // Storage blocked — the hints stay revealed for this page, just not the next one.
-  }
-}
-
-/** Easy mode hides the ladder behind a button; hard mode only ever holds earned hints. */
-function hintsCovered() {
-  return state.mode === 'easy' && !state.finished && !revealedRounds.includes(roundId(state));
 }
 
 // Premier League and The Rest are two independent daily games — switching just opens the other
@@ -153,12 +113,12 @@ async function api(path, options = {}) {
 }
 
 function renderSilhouette() {
-  // Easy mode puts the photo on the stage from the start, blurred; the blur is the puzzle.
+  // Easy mode puts the photo on the stage from the start, filtered flat; the fill is the puzzle.
   const source = state.revealUrl ?? state.photoUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
   const key = `${source}|${state.photoUrl ? 'photo' : ''}`;
 
   if (dom.silhouette.dataset.rendered === key) {
-    applyBlur();
+    applyFill();
     return;
   }
   dom.silhouette.dataset.rendered = key;
@@ -166,11 +126,14 @@ function renderSilhouette() {
 
   if (state.photoUrl && !state.revealUrl) {
     const photo = document.createElement('img');
-    photo.className = 'reveal blurred';
+    // Deliberately not `.reveal`: that carries the framed-photograph border, which would announce
+    // this as a photo from the first moment and give away that hard mode is showing the same
+    // picture. The frame arrives with the answer, at the end.
+    photo.className = 'morph';
     photo.src = withParams(state.photoUrl);
     photo.alt = "Today's player, coming into focus";
     dom.silhouette.append(photo);
-    applyBlur();
+    applyFill();
     return;
   }
 
@@ -196,13 +159,18 @@ function renderSilhouette() {
   dom.silhouette.innerHTML = state.silhouette ?? '';
 }
 
-/** Scale a touch as well, so the softened edge never shows the frame behind it. */
-function applyBlur() {
-  const photo = dom.silhouette.querySelector('img.blurred');
-  if (!photo) return;
-  const blur = state.blur ?? 0;
-  photo.style.filter = blur > 0 ? `blur(${blur}px)` : '';
-  photo.style.transform = blur > 0 ? 'scale(1.08)' : '';
+/**
+ * The ink shape resolving into a photograph.
+ *
+ * One image throughout — the photo is a background-removed cut-out, so its own alpha channel is
+ * the silhouette, and `brightness(0)` flattens it to exactly the shape hard mode shows. Nothing
+ * is masked or crossfaded: the outline never moves, only what is inside it resolves.
+ */
+function applyFill() {
+  const photo = dom.silhouette.querySelector('img.morph');
+  if (!photo || !state.fill) return;
+  const { brightness, contrast, saturate } = state.fill;
+  photo.style.filter = `brightness(${brightness}) contrast(${contrast}) saturate(${saturate})`;
 }
 
 function renderCategories() {
@@ -275,32 +243,6 @@ function renderHints() {
   count.className = 'hint-count';
   count.textContent = `${state.hints.length} of ${state.hintsTotal ?? state.hints.length}`;
   head.append(title, count);
-
-  // Covered: keep the card and its count, but leave the values out of the DOM entirely rather
-  // than hiding them in CSS — #hints is an aria-live region, so a hidden hint would still be read
-  // aloud, and would still be selectable and visible in devtools.
-  if (hintsCovered()) {
-    const cover = document.createElement('div');
-    cover.className = 'hint-cover';
-
-    const note = document.createElement('p');
-    note.className = 'hint-cover-note';
-    note.textContent = 'Easy mode gives you every hint. Reveal them when you want them.';
-
-    const reveal = document.createElement('button');
-    reveal.className = 'hint-reveal';
-    reveal.type = 'button';
-    reveal.textContent = 'Reveal hints';
-    reveal.onclick = () => {
-      rememberRevealed(roundId(state));
-      renderHints();
-    };
-
-    cover.append(note, reveal);
-    card.append(head, cover);
-    dom.hints.append(card);
-    return;
-  }
 
   const list = document.createElement('ol');
   list.className = 'hint-rows';
@@ -429,7 +371,9 @@ function shareGrid() {
     .map((guess) => (guess.correct ? '🟩' : guess.skipped ? '⬜' : '🟥'))
     .join('');
   const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
-  const marker = state.mode === 'easy' ? ' easy' : '';
+  // A symbol, not the word: the grid is glanceable, and hard mode's flex is this being absent —
+  // which only reads if the marker is loud enough to notice missing.
+  const marker = state.mode === 'easy' ? ' 👁' : '';
   const tag = state.category === 'premier-league' ? ' PL' : '';
   const caveat = shareCaveat();
   const caveatLine = caveat ? `\n${caveat}` : '';
@@ -490,6 +434,37 @@ function renderStats(target, stats, highlight) {
   caption.className = 'stat-caption';
   caption.textContent = 'Guesses used, when you got it';
   target.append(caption, chart);
+
+  renderModeSplit(target, stats);
+}
+
+/**
+ * Hard and easy side by side.
+ *
+ * The streak above spans both modes deliberately, so this is where choosing hard shows up at all:
+ * without it an easy win and a hard win are the same number and there is no reason to take the
+ * silhouette on. Hidden until there is actually something to compare — a player who has only ever
+ * played one mode is being shown a row of zeroes, not a comparison.
+ */
+function renderModeSplit(target, stats) {
+  const modes = [['Hard', stats.byMode?.hard], ['Easy', stats.byMode?.easy]];
+  if (!modes.every(([, side]) => side) || modes.some(([, side]) => side.played === 0)) return;
+
+  const caption = document.createElement('p');
+  caption.className = 'stat-caption';
+  caption.textContent = 'How you do in each mode';
+
+  const split = document.createElement('dl');
+  split.className = 'stat-split';
+  for (const [label, side] of modes) {
+    const name = document.createElement('dt');
+    name.textContent = label;
+    const value = document.createElement('dd');
+    value.textContent = `${side.won} of ${side.played} · ${side.winRate}%`;
+    split.append(name, value);
+  }
+
+  target.append(caption, split);
 }
 
 async function showStats() {

@@ -151,11 +151,11 @@ body {
   border: 3px solid var(--line);
 }
 
-/* Easy mode: the photo sharpens a step with every hint. Clipped so the scaled, softened edge
-   never shows past the frame. */
-.silhouette img.blurred {
+/* Easy mode: the silhouette fills in a step with every miss. The filter does all the work — the
+   photo's own alpha is the shape — so nothing here moves or scales the image. */
+.silhouette img.morph {
   will-change: filter;
-  transition: filter 600ms ease, transform 600ms ease;
+  transition: filter 700ms ease;
 }
 
 .stage { overflow: hidden; }
@@ -241,21 +241,28 @@ body {
   font-size: 14px;
 }
 
-/* Easy mode holds the whole ladder back behind a button, so glancing at the page can't spoil a
-   round the player meant to take on hard. Sits inside the card, so it inherits the clipped radius. */
-.hint-cover {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 16px;
-  text-align: center;
+/* Hard vs easy, side by side under the distribution. Two columns rather than the four-wide figure
+   grid above, because the point is the comparison between the rows, not the numbers alone. */
+.stat-split {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  align-items: baseline;
 }
 
-.hint-cover-note { margin: 0; color: var(--muted); font-size: 14px; }
+.stat-split dt {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-/* Not .ghost: that is full-width and white, which would vanish against the white card. */
-.hint-reveal { padding: 10px 22px; background: var(--blue); font-size: 15px; }
+.stat-split dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
 
 /* --- guesses --- */
 
