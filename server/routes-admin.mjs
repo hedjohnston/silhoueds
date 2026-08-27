@@ -5,7 +5,10 @@ import multer from 'multer';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { players, schedule, plays, CATEGORIES } from './db.mjs';
-import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
+import {
+  checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin,
+  loginDelay, recordFailedLogin, clearFailedLogins,
+} from './auth.mjs';
 import { HINT_LABELS } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
@@ -92,9 +95,23 @@ function readiness(player) {
 export const adminRouter = express.Router();
 
 adminRouter.post('/login', (req, res) => {
+  // req.ip honours trust proxy in production, so this is the visitor rather than Fly's edge.
+  const caller = req.ip ?? 'unknown';
+
+  const wait = loginDelay(caller);
+  if (wait > 0) {
+    res.set('Retry-After', String(Math.ceil(wait / 1000)));
+    return res.status(429).json({
+      error: `Too many attempts. Try again in ${Math.ceil(wait / 1000)}s.`,
+    });
+  }
+
   if (!checkPassword(req.body?.password ?? '')) {
+    recordFailedLogin(caller);
     return res.status(401).json({ error: 'Wrong password' });
   }
+
+  clearFailedLogins(caller);
   issueAdminCookie(res);
   res.json({ ok: true });
 });

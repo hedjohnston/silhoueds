@@ -48,6 +48,57 @@ export function checkPassword(candidate) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// --- login throttling ----------------------------------------------------
+//
+// A single human-chosen password is the only thing standing in front of /admin, and a
+// constant-time comparison does nothing about someone simply trying a lot of them. This costs an
+// attacker time without ever locking the real operator out for long.
+//
+// In memory on purpose: the app is one process on one machine by design (a second would serve a
+// diverging copy of the SQLite file), so there is nowhere better to put it, and losing the counts
+// on restart is an acceptable trade for having no new dependency.
+
+const ATTEMPT_LIMIT = 5;          // failures before the delay starts biting
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_DELAY_MS = 30 * 1000;
+
+const attempts = new Map();
+
+/** Sweep entries that have aged out, so the map can't grow without bound. */
+function forget(now) {
+  for (const [key, entry] of attempts) {
+    if (now - entry.last > ATTEMPT_WINDOW_MS) attempts.delete(key);
+  }
+}
+
+/**
+ * How long this caller must wait before another attempt is worth making, in ms.
+ *
+ * Backs off exponentially past the free allowance and caps out, so a sustained guessing run is
+ * throttled to a crawl while a typo or two costs nothing.
+ */
+export function loginDelay(ip, now = Date.now()) {
+  const entry = attempts.get(ip);
+  if (!entry || now - entry.last > ATTEMPT_WINDOW_MS) return 0;
+  if (entry.count <= ATTEMPT_LIMIT) return 0;
+
+  const delay = Math.min(MAX_DELAY_MS, 1000 * 2 ** (entry.count - ATTEMPT_LIMIT - 1));
+  const waited = now - entry.last;
+  return Math.max(0, delay - waited);
+}
+
+export function recordFailedLogin(ip, now = Date.now()) {
+  forget(now);
+  const entry = attempts.get(ip);
+  const count = entry && now - entry.last <= ATTEMPT_WINDOW_MS ? entry.count + 1 : 1;
+  attempts.set(ip, { count, last: now });
+}
+
+/** A correct password clears the record, so the operator is never left throttled. */
+export function clearFailedLogins(ip) {
+  attempts.delete(ip);
+}
+
 export function issueAdminCookie(res) {
   res.cookie(ADMIN_COOKIE, stamp(String(Date.now() + ADMIN_TTL_MS)), {
     httpOnly: true,
@@ -57,8 +108,16 @@ export function issueAdminCookie(res) {
   });
 }
 
+/**
+ * Browsers match a removal against the cookie's attributes, not just its name, so clearing has to
+ * repeat the ones it was set with — otherwise signing out can silently leave the cookie in place.
+ */
 export function clearAdminCookie(res) {
-  res.clearCookie(ADMIN_COOKIE);
+  res.clearCookie(ADMIN_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
 }
 
 export function isAdmin(req) {
