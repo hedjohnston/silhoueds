@@ -29,9 +29,14 @@ const dom = {
   modeHard: el('mode-hard'),
   modeEasy: el('mode-easy'),
   modeNote: el('mode-note'),
+  categoryPL: el('category-pl'),
+  categoryIntl: el('category-intl'),
 };
 
 const MODE_KEY = 'silhoueds:mode';
+const CATEGORY_KEY = 'silhoueds:category';
+const CATEGORIES = ['premier-league', 'international'];
+const DEFAULT_CATEGORY = 'international';
 
 function preferredMode() {
   try {
@@ -48,6 +53,27 @@ function rememberMode(mode) {
     // Private window or storage blocked — the round still knows its own mode server-side.
   }
 }
+
+function preferredCategory() {
+  try {
+    const stored = localStorage.getItem(CATEGORY_KEY);
+    return CATEGORIES.includes(stored) ? stored : DEFAULT_CATEGORY;
+  } catch {
+    return DEFAULT_CATEGORY;
+  }
+}
+
+function rememberCategory(category) {
+  try {
+    localStorage.setItem(CATEGORY_KEY, category);
+  } catch {
+    // Private window or storage blocked — the tab just won't be remembered next visit.
+  }
+}
+
+// Premier League and International are two independent daily games — switching just opens the
+// other one, the way switching difficulty doesn't.
+let category = preferredCategory();
 
 // Which round is on screen — today unless the archive opened an earlier one.
 let viewingDate = null;
@@ -68,6 +94,7 @@ function withParams(path) {
   const params = new URLSearchParams();
   if (timeZone) params.set('tz', timeZone);
   if (viewingDate) params.set('date', viewingDate);
+  params.set('category', category);
   const query = params.toString();
   if (!query) return path;
   return `${path}${path.includes('?') ? '&' : '?'}${query}`;
@@ -135,6 +162,22 @@ function applyBlur() {
   const blur = state.blur ?? 0;
   photo.style.filter = blur > 0 ? `blur(${blur}px)` : '';
   photo.style.transform = blur > 0 ? 'scale(1.08)' : '';
+}
+
+function renderCategories() {
+  for (const [button, value] of [[dom.categoryPL, 'premier-league'], [dom.categoryIntl, 'international']]) {
+    const active = value === category;
+    button.classList.toggle('mode-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+}
+
+async function chooseCategory(next) {
+  if (category === next || busy) return;
+  category = next;
+  rememberCategory(next);
+  renderCategories();
+  await openRound(null);
 }
 
 function renderModes() {
@@ -237,6 +280,7 @@ function renderHistory() {
 }
 
 function render() {
+  renderCategories();
   renderModes();
   renderSilhouette();
   renderHints();
@@ -315,9 +359,10 @@ function shareGrid() {
     .join('');
   const score = state.won ? `${state.guesses.length}/${state.maxGuesses}` : `X/${state.maxGuesses}`;
   const marker = state.mode === 'easy' ? ' easy' : '';
+  const tag = state.category === 'premier-league' ? ' PL' : '';
   const caveat = shareCaveat();
   const caveatLine = caveat ? `\n${caveat}` : '';
-  return `Silhoueds ${state.date} ${score}${marker}\n${squares}${caveatLine}`;
+  return `Silhoueds${tag} ${state.date} ${score}${marker}\n${squares}${caveatLine}`;
 }
 
 /** Grid plus link, for when we're pasting text rather than handing over a URL separately. */
@@ -535,6 +580,8 @@ async function init() {
   for (const button of dom.share) button.addEventListener('click', share);
   dom.modeHard.addEventListener('click', () => chooseMode('hard'));
   dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
+  dom.categoryPL.addEventListener('click', () => chooseCategory('premier-league'));
+  dom.categoryIntl.addEventListener('click', () => chooseCategory('international'));
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
   setInterval(renderCountdown, 30000);

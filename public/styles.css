@@ -90,6 +90,10 @@ body {
   background: #fff;
 }
 
+.modes + .modes {
+  margin-top: 4px;
+}
+
 .mode {
   padding: 8px 22px;
   border: none;

@@ -4,13 +4,13 @@ const el = (id) => document.getElementById(id);
 const dom = Object.fromEntries(
   [
     'login', 'login-form', 'login-error', 'password', 'app', 'logout',
-    'add-form', 'new-name', 'new-photo', 'new-silhouette', 'add-error', 'player-filter',
-    'players', 'counts',
-    'schedule-form', 'schedule-date', 'schedule-player-search', 'schedule-player-id',
-    'schedule-player-results', 'schedule', 'schedule-error',
+    'add-form', 'new-name', 'new-category', 'new-photo', 'new-silhouette', 'add-error',
+    'player-filter', 'player-category-filter', 'players', 'counts',
+    'schedule-form', 'schedule-category', 'schedule-date', 'schedule-player-search',
+    'schedule-player-id', 'schedule-player-results', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
-    'storage-alarm', 'insights', 'insight-date',
+    'storage-alarm', 'insights', 'insight-category', 'insight-date',
   ].map((id) => [id, el(id)]),
 );
 
@@ -20,6 +20,28 @@ let usedPlayerIds = [];
 let tracingPlayer = null;
 // Which player cards are expanded, so a re-render (e.g. after Save edits) doesn't collapse them.
 const expandedPlayerIds = new Set();
+
+// Premier League and International are two independent daily games, distinguished only by this
+// tag on each player. Populated from the server so the label list lives in one place.
+let categories = [];
+const CATEGORY_LABELS = { 'premier-league': 'Premier League', international: 'International' };
+const categoryLabel = (category) => CATEGORY_LABELS[category] ?? category;
+
+let playerFilter = 'all';
+let scheduleCategory = null;
+let insightCategory = null;
+
+function fillCategorySelect(select) {
+  const chosen = select.value;
+  select.innerHTML = '';
+  for (const category of categories) {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = categoryLabel(category);
+    select.append(option);
+  }
+  if ([...select.options].some((o) => o.value === chosen)) select.value = chosen;
+}
 
 // Sent with every request so dates are resolved where the operator is, not where the server runs.
 const timeZone = (() => {
@@ -75,10 +97,28 @@ function buildArt(player, { small = false } = {}) {
   return art;
 }
 
+function renderPlayerCategoryFilter() {
+  dom['player-category-filter'].innerHTML = '';
+  for (const value of ['all', ...categories]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = value === playerFilter ? 'filter-chip filter-chip-active' : 'filter-chip';
+    button.textContent = value === 'all' ? 'All' : categoryLabel(value);
+    button.onclick = () => {
+      playerFilter = value;
+      renderPlayerCategoryFilter();
+      renderPlayers();
+    };
+    dom['player-category-filter'].append(button);
+  }
+}
+
 function renderPlayers() {
   dom.players.innerHTML = '';
   const query = dom['player-filter'].value.trim().toLowerCase();
-  const visible = query ? players.filter((p) => p.name.toLowerCase().includes(query)) : players;
+  const visible = players
+    .filter((p) => !query || p.name.toLowerCase().includes(query))
+    .filter((p) => playerFilter === 'all' || p.category === playerFilter);
 
   for (const player of visible) {
     const card = document.createElement('details');
@@ -93,9 +133,12 @@ function renderPlayers() {
     const thumb = buildArt(player, { small: true });
     const title = document.createElement('h3');
     title.textContent = player.name;
+    const category = document.createElement('span');
+    category.className = 'chip chip-category';
+    category.textContent = categoryLabel(player.category);
     const chip = document.createElement('span');
     chip.innerHTML = statusChip(player);
-    summary.append(thumb, title, chip);
+    summary.append(thumb, title, category, chip);
 
     const body = document.createElement('div');
     body.className = 'player-body';
@@ -131,6 +174,16 @@ function renderPlayers() {
     aliasLabel.textContent = 'Also accepted';
     aliasLabel.append(aliasField);
 
+    const categoryField = document.createElement('select');
+    categoryField.className = 'category-select';
+    fillCategorySelect(categoryField);
+    categoryField.value = player.category;
+
+    const categoryLabelField = document.createElement('label');
+    categoryLabelField.className = 'alias-label';
+    categoryLabelField.textContent = 'Category';
+    categoryLabelField.append(categoryField);
+
     const actions = document.createElement('div');
     actions.className = 'player-actions';
 
@@ -156,6 +209,7 @@ function renderPlayers() {
           method: 'PATCH',
           body: {
             hints: edited,
+            category: categoryField.value,
             aliases: aliasField.value.split(',').map((a) => a.trim()).filter(Boolean),
           },
         });
@@ -190,7 +244,7 @@ function renderPlayers() {
     };
 
     actions.append(replace, trace, save, publish, remove);
-    details.append(hints, aliasLabel, actions);
+    details.append(hints, aliasLabel, categoryLabelField, actions);
     body.append(art, details);
     card.append(summary, body);
     dom.players.append(card);
@@ -200,15 +254,17 @@ function renderPlayers() {
   dom.counts.textContent = `${live} live · ${players.length - live} draft`;
 }
 
-/** Ready players that have never been scheduled — a player is used once, never repeated. */
+/** Ready players in the schedule's own category that have never been scheduled anywhere. */
 function schedulablePlayers() {
-  return players.filter((p) => p.status === 'ready' && !usedPlayerIds.includes(p.id));
+  return players.filter(
+    (p) => p.status === 'ready' && p.category === scheduleCategory && !usedPlayerIds.includes(p.id),
+  );
 }
 
 /**
  * Wire up the searchable name picker for the schedule form, replacing a dropdown that won't
- * scale. Called once — the handlers read `players`/`usedPlayerIds` live on every keystroke, so
- * nothing needs re-wiring as the data changes.
+ * scale. Called once — the handlers read `players`/`usedPlayerIds`/`scheduleCategory` live on
+ * every keystroke, so nothing needs re-wiring as the data changes.
  */
 function initSchedulePicker() {
   const search = dom['schedule-player-search'];
@@ -228,7 +284,7 @@ function initSchedulePicker() {
       const empty = document.createElement('li');
       empty.className = 'picker-empty';
       empty.textContent = schedulablePlayers().length === 0
-        ? 'No unused ready players left — publish more, or clear a schedule entry.'
+        ? 'No unused ready players left in this category — publish more, or clear a schedule entry.'
         : 'No match.';
       results.append(empty);
     } else {
@@ -258,6 +314,13 @@ function initSchedulePicker() {
   });
 }
 
+/** Clear whatever was typed/picked in the schedule form — used when the category changes. */
+function resetSchedulePicker() {
+  dom['schedule-player-search'].value = '';
+  dom['schedule-player-id'].value = '';
+  dom['schedule-player-results'].hidden = true;
+}
+
 async function refresh() {
   const data = await api('/api/admin/players');
   players = data.players;
@@ -268,7 +331,9 @@ async function refresh() {
 }
 
 async function refreshSchedule() {
-  const { upcoming, today, stats, usedPlayerIds: used } = await api('/api/admin/schedule');
+  const { upcoming, today, stats, usedPlayerIds: used } = await api(
+    `/api/admin/schedule?category=${scheduleCategory}`,
+  );
   usedPlayerIds = used;
   dom.schedule.innerHTML = '';
   if (upcoming.length === 0) {
@@ -282,7 +347,7 @@ async function refreshSchedule() {
     clear.className = 'ghost';
     clear.textContent = 'Clear';
     clear.onclick = async () => {
-      await api(`/api/admin/schedule/${entry.date}`, { method: 'DELETE' });
+      await api(`/api/admin/schedule/${entry.date}?category=${scheduleCategory}`, { method: 'DELETE' });
       await refreshSchedule();
     };
     row.append(label, clear);
@@ -354,7 +419,9 @@ function guessList(title, items, render) {
 }
 
 async function renderInsights(date) {
-  const data = await api(`/api/admin/insights${date ? `?date=${date}` : ''}`);
+  const params = new URLSearchParams({ category: insightCategory });
+  if (date) params.set('date', date);
+  const data = await api(`/api/admin/insights?${params}`);
   dom.insights.innerHTML = '';
 
   const { summary } = data;
@@ -437,7 +504,7 @@ async function renderInsights(date) {
 }
 
 async function refreshInsightDates() {
-  const { dates } = await api('/api/admin/insights/dates');
+  const { dates } = await api(`/api/admin/insights/dates?category=${insightCategory}`);
   const chosen = dom['insight-date'].value;
   dom['insight-date'].innerHTML = '';
   if (dates.length === 0) {
@@ -529,19 +596,16 @@ dom['add-form'].onsubmit = async (event) => {
   showError(dom['add-error'], '');
   const form = new FormData();
   form.append('name', dom['new-name'].value.trim());
+  form.append('category', dom['new-category'].value);
   if (dom['new-silhouette'].files[0]) form.append('silhouette', dom['new-silhouette'].files[0]);
   if (dom['new-photo'].files[0]) form.append('photo', dom['new-photo'].files[0]);
   const button = dom['add-form'].querySelector('button');
   button.disabled = true;
   button.textContent = 'Working…';
   try {
-    const { steps } = await api('/api/admin/players', { method: 'POST', form });
+    await api('/api/admin/players', { method: 'POST', form });
     dom['add-form'].reset();
     await refresh();
-    const problems = Object.entries(steps ?? {})
-      .filter(([, value]) => value !== 'done')
-      .map(([step, value]) => `${step}: ${value}`);
-    showError(dom['add-error'], problems.join(' · '));
   } catch (error) {
     showError(dom['add-error'], error);
   } finally {
@@ -561,24 +625,45 @@ dom['schedule-form'].onsubmit = async (event) => {
   try {
     await api(`/api/admin/schedule/${dom['schedule-date'].value}`, {
       method: 'PUT',
-      body: { playerId: Number(playerId) },
+      body: { playerId: Number(playerId), category: scheduleCategory },
     });
-    dom['schedule-player-search'].value = '';
-    dom['schedule-player-id'].value = '';
-    dom['schedule-player-results'].hidden = true;
+    resetSchedulePicker();
     await refreshSchedule();
   } catch (error) {
     showError(dom['schedule-error'], error);
   }
 };
 
+dom['schedule-category'].onchange = async () => {
+  scheduleCategory = dom['schedule-category'].value;
+  resetSchedulePicker();
+  await refreshSchedule();
+};
+
+dom['insight-category'].onchange = async () => {
+  insightCategory = dom['insight-category'].value;
+  await refreshInsightDates();
+};
+
+dom['insight-date'].onchange = () => renderInsights(dom['insight-date'].value);
+
 // --- boot ----------------------------------------------------------------
 
 async function start() {
-  const { signedIn, storage } = await api('/api/admin/session');
+  const { signedIn, storage, categories: fetched } = await api('/api/admin/session');
   dom.login.hidden = signedIn;
   dom.app.hidden = !signedIn;
   if (!signedIn) return;
+
+  categories = fetched ?? [];
+  scheduleCategory = categories[0];
+  insightCategory = categories[0];
+  fillCategorySelect(dom['new-category']);
+  fillCategorySelect(dom['schedule-category']);
+  fillCategorySelect(dom['insight-category']);
+  dom['schedule-category'].value = scheduleCategory;
+  dom['insight-category'].value = insightCategory;
+  renderPlayerCategoryFilter();
 
   // The one failure that silently destroys work: writing to a disk that isn't persistent.
   const ephemeral = storage && storage.checked && !storage.mounted;

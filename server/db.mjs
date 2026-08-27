@@ -7,6 +7,10 @@ import path from 'node:path';
 
 export const DB_PATH = process.env.SILHOUEDS_DB ?? 'data/silhoueds.db';
 
+// Two independent daily games share this database, distinguished only by this tag.
+export const CATEGORIES = ['premier-league', 'international'];
+export const DEFAULT_CATEGORY = 'international';
+
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);
 
@@ -55,6 +59,9 @@ const columns = new Set(db.prepare('PRAGMA table_info(players)').all().map((c) =
 for (const [name, definition] of [
   ['silhouette_image', 'TEXT'],  // uploaded silhouette artwork filename
   ['reveal_image', 'TEXT'],      // full photo, shown once the round is over
+  // Everyone seeded before categories existed played as international stars, not Premier
+  // League specialists, so that is the default the migration gives them.
+  ['category', `TEXT NOT NULL DEFAULT '${DEFAULT_CATEGORY}'`],
 ]) {
   if (!columns.has(name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
@@ -63,6 +70,47 @@ for (const [name, definition] of [
 const playColumns = new Set(db.prepare('PRAGMA table_info(plays)').all().map((c) => c.name));
 if (!playColumns.has('mode')) {
   db.exec("ALTER TABLE plays ADD COLUMN mode TEXT NOT NULL DEFAULT 'hard'");
+}
+
+// Premier League and International are separate daily games, so `schedule` and `plays` both
+// need `category` folded into their primary key. Sqlite can't alter a primary key in place, so
+// this rebuilds each table the first time it finds one without the column — existing rows carry
+// forward as DEFAULT_CATEGORY, which is exactly what already-playing visitors were doing.
+if (!db.prepare('PRAGMA table_info(schedule)').all().some((c) => c.name === 'category')) {
+  db.exec(`
+    ALTER TABLE schedule RENAME TO schedule_pre_category;
+    CREATE TABLE schedule (
+      date       TEXT    NOT NULL,
+      category   TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
+      player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      PRIMARY KEY (date, category)
+    );
+    INSERT INTO schedule (date, category, player_id)
+      SELECT date, '${DEFAULT_CATEGORY}', player_id FROM schedule_pre_category;
+    DROP TABLE schedule_pre_category;
+  `);
+}
+
+if (!db.prepare('PRAGMA table_info(plays)').all().some((c) => c.name === 'category')) {
+  db.exec(`
+    ALTER TABLE plays RENAME TO plays_pre_category;
+    CREATE TABLE plays (
+      session_id TEXT    NOT NULL,
+      date       TEXT    NOT NULL,
+      category   TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
+      guesses    TEXT    NOT NULL DEFAULT '[]',
+      finished   INTEGER NOT NULL DEFAULT 0,
+      won        INTEGER NOT NULL DEFAULT 0,
+      mode       TEXT    NOT NULL DEFAULT 'hard',
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, date, category)
+    );
+    INSERT INTO plays (session_id, date, category, guesses, finished, won, mode, updated_at)
+      SELECT session_id, date, '${DEFAULT_CATEGORY}', guesses, finished, won, mode, updated_at
+      FROM plays_pre_category;
+    DROP TABLE plays_pre_category;
+    CREATE INDEX IF NOT EXISTS plays_by_date ON plays(date);
+  `);
 }
 
 const parse = (row) =>
@@ -83,8 +131,13 @@ export const players = {
   bySlug(slug) {
     return parse(db.prepare('SELECT * FROM players WHERE slug = ?').get(slug));
   },
-  ready() {
-    return db.prepare("SELECT * FROM players WHERE status = 'ready' ORDER BY id").all().map(parse);
+  ready(category) {
+    return category
+      ? db
+          .prepare("SELECT * FROM players WHERE status = 'ready' AND category = ? ORDER BY id")
+          .all(category)
+          .map(parse)
+      : db.prepare("SELECT * FROM players WHERE status = 'ready' ORDER BY id").all().map(parse);
   },
   /** Every image filename a player owns, for cleaning up on delete or replace. */
   images(player) {
@@ -92,17 +145,17 @@ export const players = {
   },
   create({
     slug, name, aliases = [], hints = [], silhouette = null, photo = null,
-    silhouetteImage = null, revealImage = null, hintSource = 'manual',
+    silhouetteImage = null, revealImage = null, hintSource = 'manual', category = DEFAULT_CATEGORY,
   }) {
     const { lastInsertRowid } = db
       .prepare(
         `INSERT INTO players
-           (slug, name, aliases, hints, silhouette, photo, silhouette_image, reveal_image, hint_source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (slug, name, aliases, hints, silhouette, photo, silhouette_image, reveal_image, hint_source, category)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         slug, name, JSON.stringify(aliases), JSON.stringify(hints), silhouette, photo,
-        silhouetteImage, revealImage, hintSource,
+        silhouetteImage, revealImage, hintSource, category,
       );
     return this.get(lastInsertRowid);
   },
@@ -117,6 +170,7 @@ export const players = {
       reveal_image: (v) => v,
       status: (v) => v,
       hint_source: (v) => v,
+      category: (v) => v,
     };
     const sets = [];
     const values = [];
@@ -137,50 +191,52 @@ export const players = {
 };
 
 export const schedule = {
-  get(date) {
+  get(date, category) {
     const row = db
-      .prepare('SELECT p.* FROM schedule s JOIN players p ON p.id = s.player_id WHERE s.date = ?')
-      .get(date);
+      .prepare(
+        'SELECT p.* FROM schedule s JOIN players p ON p.id = s.player_id WHERE s.date = ? AND s.category = ?',
+      )
+      .get(date, category);
     return parse(row);
   },
-  set(date, playerId) {
+  set(date, category, playerId) {
     db.prepare(
-      `INSERT INTO schedule (date, player_id) VALUES (?, ?)
-       ON CONFLICT(date) DO UPDATE SET player_id = excluded.player_id`,
-    ).run(date, playerId);
+      `INSERT INTO schedule (date, category, player_id) VALUES (?, ?, ?)
+       ON CONFLICT(date, category) DO UPDATE SET player_id = excluded.player_id`,
+    ).run(date, category, playerId);
   },
-  clear(date) {
-    db.prepare('DELETE FROM schedule WHERE date = ?').run(date);
+  clear(date, category) {
+    db.prepare('DELETE FROM schedule WHERE date = ? AND category = ?').run(date, category);
   },
   /** Today onwards. `today` is passed in: SQLite's date('now') is always UTC. */
-  upcoming(today, limit = 30) {
+  upcoming(today, category, limit = 30) {
     return db
       .prepare(
         `SELECT s.date, p.id, p.name, p.slug FROM schedule s
          JOIN players p ON p.id = s.player_id
-         WHERE s.date >= ? ORDER BY s.date LIMIT ?`,
+         WHERE s.date >= ? AND s.category = ? ORDER BY s.date LIMIT ?`,
       )
-      .all(today, limit);
+      .all(today, category, limit);
   },
   /** Past puzzles that actually ran, newest first — the archive. */
-  past(today, limit = 60) {
+  past(today, category, limit = 60) {
     return db
       .prepare(
         `SELECT s.date FROM schedule s
          JOIN players p ON p.id = s.player_id
-         WHERE s.date <= ? ORDER BY s.date DESC LIMIT ?`,
+         WHERE s.date <= ? AND s.category = ? ORDER BY s.date DESC LIMIT ?`,
       )
-      .all(today, limit)
+      .all(today, category, limit)
       .map((row) => row.date);
   },
   /**
    * Dates already spoken for, so auto-assignment doesn't reuse a player still queued up.
    * The cutoff is passed in for the same reason as above.
    */
-  scheduledPlayerIds(since) {
+  scheduledPlayerIds(since, category) {
     return db
-      .prepare('SELECT player_id FROM schedule WHERE date >= ?')
-      .all(since)
+      .prepare('SELECT player_id FROM schedule WHERE date >= ? AND category = ?')
+      .all(since, category)
       .map((r) => r.player_id);
   },
   /** Every player ever scheduled, any date — the picker excludes these; a player is used once. */
@@ -193,8 +249,10 @@ export const schedule = {
 };
 
 export const plays = {
-  get(sessionId, date) {
-    const row = db.prepare('SELECT * FROM plays WHERE session_id = ? AND date = ?').get(sessionId, date);
+  get(sessionId, date, category) {
+    const row = db
+      .prepare('SELECT * FROM plays WHERE session_id = ? AND date = ? AND category = ?')
+      .get(sessionId, date, category);
     return (
       row && {
         ...row,
@@ -205,24 +263,24 @@ export const plays = {
       }
     );
   },
-  save(sessionId, date, { guesses, finished, won, mode = 'hard' }) {
+  save(sessionId, date, category, { guesses, finished, won, mode = 'hard' }) {
     db.prepare(
-      `INSERT INTO plays (session_id, date, guesses, finished, won, mode)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(session_id, date) DO UPDATE SET
+      `INSERT INTO plays (session_id, date, category, guesses, finished, won, mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, date, category) DO UPDATE SET
          guesses = excluded.guesses, finished = excluded.finished,
          won = excluded.won, mode = excluded.mode, updated_at = datetime('now')`,
-    ).run(sessionId, date, JSON.stringify(guesses), finished ? 1 : 0, won ? 1 : 0, mode);
+    ).run(sessionId, date, category, JSON.stringify(guesses), finished ? 1 : 0, won ? 1 : 0, mode);
   },
   /** Every finished round for one visitor, newest first — the raw material for stats. */
-  history(sessionId) {
+  history(sessionId, category) {
     return db
       .prepare(
         `SELECT date, won, guesses, mode FROM plays
-         WHERE session_id = ? AND finished = 1
+         WHERE session_id = ? AND category = ? AND finished = 1
          ORDER BY date DESC`,
       )
-      .all(sessionId)
+      .all(sessionId, category)
       .map((row) => ({
         date: row.date,
         won: !!row.won,
@@ -231,10 +289,10 @@ export const plays = {
       }));
   },
   /** Every round played on a date, for the admin's guess log. */
-  forDate(date) {
+  forDate(date, category) {
     return db
-      .prepare('SELECT * FROM plays WHERE date = ? ORDER BY updated_at')
-      .all(date)
+      .prepare('SELECT * FROM plays WHERE date = ? AND category = ? ORDER BY updated_at')
+      .all(date, category)
       .map((row) => ({
         session: row.session_id,
         guesses: JSON.parse(row.guesses),
@@ -245,19 +303,21 @@ export const plays = {
       }));
   },
   /** Dates anyone has actually played, newest first. */
-  playedDates(limit = 60) {
+  playedDates(category, limit = 60) {
     return db
-      .prepare('SELECT date, COUNT(*) AS players FROM plays GROUP BY date ORDER BY date DESC LIMIT ?')
-      .all(limit);
+      .prepare(
+        'SELECT date, COUNT(*) AS players FROM plays WHERE category = ? GROUP BY date ORDER BY date DESC LIMIT ?',
+      )
+      .all(category, limit);
   },
-  stats(date) {
+  stats(date, category) {
     return db
       .prepare(
         `SELECT COUNT(*) AS plays,
                 SUM(won) AS wins,
                 SUM(finished) AS finished
-         FROM plays WHERE date = ?`,
+         FROM plays WHERE date = ? AND category = ?`,
       )
-      .get(date);
+      .get(date, category);
   },
 };

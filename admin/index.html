@@ -40,6 +40,10 @@
           <input id="new-name" placeholder="e.g. Ronaldinho" required>
         </div>
         <div class="field">
+          <label for="new-category">Category</label>
+          <select id="new-category"></select>
+        </div>
+        <div class="field">
           <label for="new-silhouette">Silhouette image</label>
           <input id="new-silhouette" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/svg+xml">
         </div>
@@ -63,12 +67,14 @@
         <p class="counts" id="counts"></p>
       </div>
       <input class="player-filter" id="player-filter" type="text" placeholder="Filter players…">
+      <div class="category-filter" id="player-category-filter" role="group" aria-label="Filter by category"></div>
       <div class="players" id="players"></div>
     </section>
 
     <section class="panel">
       <div class="panel-head">
         <h2>What people guessed</h2>
+        <select id="insight-category"></select>
         <select id="insight-date"></select>
       </div>
       <p class="hint-text">
@@ -81,9 +87,11 @@
     <section class="panel">
       <h2>Schedule</h2>
       <p class="hint-text">
-        Unscheduled days pick a ready player automatically. Set a date to override.
+        Unscheduled days pick a ready player automatically. Set a date to override. Premier
+        League and International run as two separate daily puzzles, each with its own schedule.
       </p>
       <form class="schedule-form" id="schedule-form">
+        <select id="schedule-category" required></select>
         <input type="date" id="schedule-date" required>
         <div class="picker">
           <input

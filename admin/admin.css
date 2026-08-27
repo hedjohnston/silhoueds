@@ -112,6 +112,13 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 2px solid var(--edge); white-space: nowrap; background: #fff; }
 .chip-ready { background: var(--ok); }
 .chip-draft { background: var(--card-tint); color: var(--muted); }
+.chip-category { background: var(--card-tint); }
+
+.category-filter { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.filter-chip { font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 999px; border: 2px solid var(--edge); background: #fff; cursor: pointer; }
+.filter-chip-active { background: var(--accent); }
+
+.category-select { max-width: 220px; }
 
 .player-body { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
 

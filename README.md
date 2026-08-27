@@ -2,9 +2,10 @@
 
 A daily guessing game: name the footballer from their silhouette.
 
-One player per day, six guesses. Every wrong guess (or a skip) reveals the next hint — position,
-nationality, era, league, then the club they're best known for. Finish and you get a shareable
-emoji grid.
+Two independent daily puzzles run side by side — Premier League and International — each its own
+schedule, streak and stats, switched with a tab in the game. One player per puzzle per day, six
+guesses. Every wrong guess (or a skip) reveals the next hint — era, position, league, nationality,
+then the club they're best known for. Finish and you get a shareable emoji grid.
 
 There is no dropdown of names. Players type a guess freely, and the server decides whether it's
 right — the browser never receives the answer until the round is over.
@@ -163,12 +164,15 @@ Public:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day |
+| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day. `?category=premier-league\|international` picks the game, default `international` |
 | `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
 | `POST /api/skip` | Burns a guess to reveal a hint |
 | `POST /api/mode` | `{ mode }` → sets hard or easy; refused once the round has a guess |
 | `GET /api/stats` | This visitor's played, win rate, streaks and guess distribution |
 | `GET /api/archive` | Past puzzles and how this visitor did on each |
+
+Every endpoint above takes `?category=` (or `{ category }` in the body) — Premier League and
+International are separate games with their own schedule, plays and stats.
 
 Admin (all behind a signed cookie except `/login`): `POST /api/admin/login`, `GET|POST
 /api/admin/players`, `POST /api/admin/players/:id/hints`, `PATCH|DELETE /api/admin/players/:id`,

@@ -5,13 +5,18 @@ import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { players, schedule, plays } from './db.mjs';
+import { players, schedule, plays, CATEGORIES } from './db.mjs';
 import { checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin } from './auth.mjs';
 import { HINT_LABELS } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
-import { todayKey, hasArtwork, playerForDate } from './game.mjs';
+import { todayKey, hasArtwork, playerForDate, normalizeCategory } from './game.mjs';
 import { closeness } from './matching.mjs';
+
+/** Which of the two daily games this request concerns. */
+function categoryOf(req) {
+  return normalizeCategory(req.query?.category ?? req.body?.category);
+}
 
 const UPLOAD_DIR = process.env.SILHOUEDS_UPLOADS ?? 'data/uploads';
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -81,6 +86,7 @@ adminRouter.get('/session', (req, res) => {
     signedIn: isAdmin(req),
     storage: storageStatus(),
     hintLabels: HINT_LABELS,
+    categories: CATEGORIES,
   });
 });
 
@@ -112,6 +118,7 @@ adminRouter.post('/players', uploads, async (req, res) => {
     photo: photoFile,
     silhouetteImage: silhouetteFile,
     revealImage: photoFile,
+    category: categoryOf(req),
   });
 
   res.status(201).json({ player: { ...player, missing: readiness(player) } });
@@ -160,6 +167,9 @@ adminRouter.patch('/players/:id', (req, res) => {
     fields.hint_source = 'manual';
   }
   if (typeof req.body.silhouette === 'string') fields.silhouette = req.body.silhouette;
+  if (typeof req.body.category === 'string' && CATEGORIES.includes(req.body.category)) {
+    fields.category = req.body.category;
+  }
 
   if (req.body.status === 'ready' || req.body.status === 'draft') {
     const candidate = { ...player, ...fields };
@@ -198,10 +208,12 @@ adminRouter.get('/players/:id/silhouette-image', (req, res) => {
 adminRouter.get('/schedule', (req, res) => {
   // The operator's own day, not the server's.
   const today = todayKey(new Date(), zoneOf(req));
+  const category = categoryOf(req);
   res.json({
     today,
-    upcoming: schedule.upcoming(today),
-    stats: plays.stats(today),
+    upcoming: schedule.upcoming(today, category),
+    stats: plays.stats(today, category),
+    // A player is single-category, so this never wrongly excludes one from the other game.
     usedPlayerIds: schedule.allScheduledPlayerIds(),
   });
 });
@@ -209,19 +221,24 @@ adminRouter.get('/schedule', (req, res) => {
 adminRouter.put('/schedule/:date', (req, res) => {
   const date = req.params.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Bad date' });
+  const category = categoryOf(req);
 
   const player = players.get(Number(req.body?.playerId));
   if (!player) return res.status(404).json({ error: 'No such player' });
   if (readiness(player).length > 0) {
     return res.status(400).json({ error: 'That player is still a draft.' });
   }
-  schedule.set(date, player.id);
-  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req))) });
+  if (player.category !== category) {
+    return res.status(400).json({ error: `That player is tagged ${player.category}, not ${category}.` });
+  }
+  schedule.set(date, category, player.id);
+  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req)), category) });
 });
 
 adminRouter.delete('/schedule/:date', (req, res) => {
-  schedule.clear(req.params.date);
-  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req))) });
+  const category = categoryOf(req);
+  schedule.clear(req.params.date, category);
+  res.json({ ok: true, upcoming: schedule.upcoming(todayKey(new Date(), zoneOf(req)), category) });
 });
 
 /**
@@ -231,11 +248,12 @@ adminRouter.delete('/schedule/:date', (req, res) => {
  * are kept, so this shows what was guessed but never who guessed it.
  */
 adminRouter.get('/insights', (req, res) => {
+  const category = categoryOf(req);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query?.date ?? '')
     ? req.query.date
     : todayKey(new Date(), zoneOf(req));
-  const player = playerForDate(date);
-  const rounds = plays.forDate(date);
+  const player = playerForDate(date, category);
+  const rounds = plays.forDate(date, category);
 
   let solved = 0;
   let totalGuesses = 0;
@@ -299,5 +317,5 @@ adminRouter.get('/insights', (req, res) => {
 });
 
 adminRouter.get('/insights/dates', (req, res) => {
-  res.json({ dates: plays.playedDates() });
+  res.json({ dates: plays.playedDates(categoryOf(req)) });
 });

@@ -1,9 +1,16 @@
 // Server-side round logic. The client is told the silhouette, the hints it has earned, and
 // whether each guess was right — never the answer, until the round is over.
 
-import { players, schedule, plays } from './db.mjs';
+import { players, schedule, plays, CATEGORIES, DEFAULT_CATEGORY } from './db.mjs';
 import { matchesPlayer } from './matching.mjs';
 import { inLadderOrder } from './hints.mjs';
+
+export { CATEGORIES, DEFAULT_CATEGORY };
+
+/** A requested category, falling back to the default rather than throwing on anything unknown. */
+export function normalizeCategory(requested) {
+  return CATEGORIES.includes(requested) ? requested : DEFAULT_CATEGORY;
+}
 
 export const MAX_GUESSES = 6;
 
@@ -50,19 +57,19 @@ export function hasArtwork(player) {
 }
 
 /** Deterministic pick, so an unscheduled day still resolves the same way on every request. */
-function autoAssign(date) {
-  const pool = players.ready().filter(hasArtwork);
+function autoAssign(date, category) {
+  const pool = players.ready(category).filter(hasArtwork);
   if (pool.length === 0) return null;
 
   // Prefer players not already queued on another date, so the schedule isn't undercut.
   const yearAgo = new Date(Date.parse(`${date}T00:00:00Z`) - 365 * 86400000).toISOString().slice(0, 10);
-  const spoken = new Set(schedule.scheduledPlayerIds(yearAgo));
+  const spoken = new Set(schedule.scheduledPlayerIds(yearAgo, category));
   const fresh = pool.filter((p) => !spoken.has(p.id));
   const candidates = fresh.length > 0 ? fresh : pool;
 
   const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
   const chosen = candidates[((day % candidates.length) + candidates.length) % candidates.length];
-  schedule.set(date, chosen.id);
+  schedule.set(date, category, chosen.id);
   return chosen;
 }
 
@@ -73,16 +80,16 @@ function autoAssign(date) {
  * auto-assigned, or requesting arbitrary dates would quietly burn through the pool of players.
  * A future date never resolves, so the archive can't be used to read ahead.
  */
-export function resolveRoundDate(requested, today) {
+export function resolveRoundDate(requested, today, category) {
   if (!requested) return today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) return null;
   if (requested > today) return null;
   if (requested === today) return today;
-  return schedule.get(requested) ? requested : null;
+  return schedule.get(requested, category) ? requested : null;
 }
 
-export function playerForDate(date) {
-  return schedule.get(date) ?? autoAssign(date);
+export function playerForDate(date, category) {
+  return schedule.get(date, category) ?? autoAssign(date, category);
 }
 
 /** The calendar day before `date` ("YYYY-MM-DD"), for walking a streak backwards. */
@@ -97,8 +104,8 @@ function previousDay(date) {
  * The streak walks back a day at a time from today, so it stays consistent with the per-player
  * rollover: a day you didn't play breaks it, and today not being played yet does not.
  */
-export function statsFor(sessionId, today) {
-  const history = plays.history(sessionId);
+export function statsFor(sessionId, today, category) {
+  const history = plays.history(sessionId, category);
   const played = history.length;
   const wins = history.filter((round) => round.won);
 
@@ -180,6 +187,7 @@ export function publicState(player, play) {
     photoUrl: easy && !finished ? '/api/puzzle/reveal' : null,
     blur: easy ? blurFor(player, guesses, finished) : 0,
     date: play?.date,
+    category: player.category,
     // Uploaded artwork is served through the API; a traced outline is inlined as SVG.
     silhouetteUrl: player.silhouette_image ? '/api/puzzle/silhouette' : null,
     silhouette: player.silhouette_image ? null : player.silhouette,
@@ -198,10 +206,10 @@ export function publicState(player, play) {
   };
 }
 
-export function loadRound(sessionId, date = todayKey()) {
-  const player = playerForDate(date);
+export function loadRound(sessionId, date = todayKey(), category = DEFAULT_CATEGORY) {
+  const player = playerForDate(date, category);
   if (!player) return null;
-  const play = plays.get(sessionId, date) ?? {
+  const play = plays.get(sessionId, date, category) ?? {
     date,
     guesses: [],
     finished: false,
@@ -217,8 +225,8 @@ export function loadRound(sessionId, date = todayKey()) {
  * Refused once a guess exists: a round started hard and finished easy would quietly make scores
  * mean different things. Easy also needs a full photo to reveal, so it is refused without one.
  */
-export function setMode(sessionId, date, requested) {
-  const round = loadRound(sessionId, date);
+export function setMode(sessionId, date, category, requested) {
+  const round = loadRound(sessionId, date, category);
   if (!round) return null;
 
   const { player, play } = round;
@@ -228,7 +236,7 @@ export function setMode(sessionId, date, requested) {
 
   if (allowed && wanted !== play.mode) {
     play.mode = wanted;
-    plays.save(sessionId, date, play);
+    plays.save(sessionId, date, category, play);
   }
   return { ...publicState(player, { ...play, date }), locked: play.guesses.length > 0 };
 }
@@ -237,10 +245,14 @@ export function setMode(sessionId, date, requested) {
  * Apply one guess (or a skip) and persist it. Returns the new public state plus `spelling`,
  * which flags a match that only got through on fuzzy tolerance.
  */
-export function submitGuess(sessionId, rawGuess, { skipped = false, timeZone, date: requested } = {}) {
-  const date = resolveRoundDate(requested, todayKey(new Date(), timeZone));
+export function submitGuess(
+  sessionId,
+  rawGuess,
+  { skipped = false, timeZone, date: requested, category = DEFAULT_CATEGORY } = {},
+) {
+  const date = resolveRoundDate(requested, todayKey(new Date(), timeZone), category);
   if (!date) return null;
-  const round = loadRound(sessionId, date);
+  const round = loadRound(sessionId, date, category);
   if (!round) return null;
 
   const { player, play } = round;
@@ -260,6 +272,6 @@ export function submitGuess(sessionId, rawGuess, { skipped = false, timeZone, da
     play.won = false;
   }
 
-  plays.save(sessionId, date, play);
+  plays.save(sessionId, date, category, play);
   return { ...publicState(player, { ...play, date }), spelling: matched && !exact };
 }
