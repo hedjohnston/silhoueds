@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gameRouter } from './routes-game.mjs';
 import { adminRouter } from './routes-admin.mjs';
+import { authRouter } from './routes-auth.mjs';
 import { warnIfEphemeral } from './storage.mjs';
 import { db } from './db.mjs';
 
@@ -77,6 +78,7 @@ app.get('/healthz', (req, res) => {
 
 app.use('/api', gameRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/auth', authRouter);
 
 // The link-preview tags need an absolute URL, and scrapers don't run JavaScript, so the page is
 // served through a substitution rather than as a plain static file. Configure

@@ -24,6 +24,9 @@ const dom = {
   comeback: el('comeback'),
   statsButton: el('stats-button'),
   archiveButton: el('archive-button'),
+  authStatus: el('auth-status'),
+  authSignin: el('auth-signin'),
+  authSignout: el('auth-signout'),
   sheet: el('sheet'),
   sheetTitle: el('sheet-title'),
   sheetBody: el('sheet-body'),
@@ -586,6 +589,38 @@ function renderModeSplit(target, stats) {
   target.append(caption, split);
 }
 
+/**
+ * Whether this browser is signed in, and to whom — shown as one of three states in the footer:
+ * a sign-in link, or a name plus a sign-out link. The identity itself lives entirely in the
+ * httpOnly session cookie; this is just asking the server what it currently means.
+ */
+async function initAuth() {
+  let session;
+  try {
+    session = await api('/api/auth/session');
+  } catch {
+    return; // The sign-in link just doesn't appear — the game itself never depends on this.
+  }
+  dom.authSignin.hidden = session.signedIn || !session.googleEnabled;
+  dom.authStatus.hidden = !session.signedIn;
+  dom.authSignout.hidden = !session.signedIn;
+  if (session.signedIn) dom.authStatus.textContent = `Signed in as ${session.name || 'you'}`;
+}
+
+/** Reads a `?auth=` query param left by the Google sign-in redirect, then removes it. */
+function reportAuthResult() {
+  const params = new URLSearchParams(location.search);
+  const outcome = params.get('auth');
+  if (!outcome) return;
+
+  const messages = { error: 'Sign-in failed — please try again.', cancelled: 'Sign-in cancelled.' };
+  if (messages[outcome]) notify(messages[outcome]);
+
+  params.delete('auth');
+  const query = params.toString();
+  history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
+}
+
 async function showStats() {
   try {
     const stats = await api('/api/stats');
@@ -813,8 +848,14 @@ async function init() {
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
   dom.settingsTrigger.addEventListener('click', () => dom.settingsSheet.showModal());
+  dom.authSignout.addEventListener('click', async () => {
+    await api('/api/auth/logout', { method: 'POST' });
+    location.reload();
+  });
   setInterval(renderCountdown, 30000);
 
+  reportAuthResult();
+  initAuth();
   await openRound(null);
 }
 

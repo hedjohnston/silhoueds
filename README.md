@@ -36,6 +36,7 @@ Two environment variables are required and the server refuses to boot without th
 | `SILHOUEDS_TIMEZONE` | Optional — fallback zone, default `Australia/Sydney` |
 | `SILHOUEDS_ACCEPT_EPHEMERAL` | Optional — silences the persistent-disk warning |
 | `SILHOUEDS_PUBLIC_URL` | Optional — only behind a proxy that rewrites the host |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional — enables "Sign in with Google"; leave both unset to run anonymous-only |
 
 Storage is a SQLite file at `data/silhoueds.db`, via `node:sqlite` — built into Node 22.5+, so
 there is no native module to compile. Uploaded photos live in `data/uploads/`. Neither directory
@@ -221,6 +222,14 @@ Public:
 Every endpoint above takes `?category=` (or `{ category }` in the body) — Premier League and
 The Rest are separate games with their own schedule, plays and stats.
 
+Auth — optional, and only ever about linking one browser's own stats to itself:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/auth/session` | Whether this browser is signed in, and to what name |
+| `GET /api/auth/google/start` \| `/callback` | The sign-in redirect and its return trip |
+| `POST /api/auth/logout` | Sign out — the next visit is a fresh anonymous session |
+
 Admin, all behind a signed cookie except `/login`, `/logout` and `/session`:
 
 | Endpoint | Purpose |
@@ -235,6 +244,7 @@ Admin, all behind a signed cookie except `/login`, `/logout` and `/session`:
 | `GET\|PUT\|DELETE /api/admin/schedule[/:date]` | Read the queue, pin a player to a day, or clear one |
 | `GET /api/admin/insights[?date=]` | What was guessed that day. Read-only — it never assigns a player |
 | `GET /api/admin/insights/dates` | Days anyone has played |
+| `GET\|DELETE /api/admin/users[/:id]` | List accounts, or delete one — deletes everything it ever played too |
 
 These take `?category=` too, defaulting to `international`.
 
@@ -298,6 +308,19 @@ fly secrets set \
 fly deploy
 fly scale count 1                 # exactly one machine — see below
 ```
+
+Optional — enables "Sign in with Google" (skip this and the app runs anonymous-only, exactly as
+before):
+
+```sh
+fly secrets set \
+  GOOGLE_CLIENT_ID='...' \
+  GOOGLE_CLIENT_SECRET='...'
+```
+
+The redirect URI registered for that OAuth client in Google Cloud Console must exactly match
+`https://<your-app>.fly.dev/api/auth/google/callback` — scheme included, or Google rejects the
+callback with `redirect_uri_mismatch`.
 
 Then seed the starter players once:
 

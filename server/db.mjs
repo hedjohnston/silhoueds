@@ -66,6 +66,18 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS plays_by_date ON plays(date);
+
+  -- A Google account, linked the first time someone signs in. Anonymous play never touches this
+  -- table — session_id in \`plays\` stays a bare opaque string either way; a signed-in player is
+  -- just one whose session_id happens to be "user:<id>" instead of a random uuid.
+  CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    google_sub TEXT    NOT NULL UNIQUE,
+    email      TEXT    NOT NULL DEFAULT '',
+    name       TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 const hasColumn = (table, column) =>
@@ -443,5 +455,65 @@ export const plays = {
          FROM plays WHERE date = ? AND category = ?`,
       )
       .get(date, category);
+  },
+  /**
+   * Re-key one visitor's history onto another session id — used when a browser signs in for the
+   * first time and its anonymous history needs to move under the account.
+   *
+   * On a (date, category) the account already has a row for, the account's row wins and the
+   * anonymous duplicate is dropped: that only happens when the same puzzle was played on two
+   * different anonymous browsers before either ever signed in, which is rare enough that "which
+   * one is more complete" isn't worth deciding.
+   */
+  claim(fromSessionId, toSessionId) {
+    if (fromSessionId === toSessionId) return;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare(
+        `UPDATE plays SET session_id = ?
+         WHERE session_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM plays p2
+             WHERE p2.session_id = ? AND p2.date = plays.date AND p2.category = plays.category
+           )`,
+      ).run(toSessionId, fromSessionId, toSessionId);
+      // Whatever's left under the old id collided with a row the account already had.
+      db.prepare('DELETE FROM plays WHERE session_id = ?').run(fromSessionId);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw new Error(
+        `Claim from ${fromSessionId} to ${toSessionId} failed and was rolled back: ${error.message}`,
+        { cause: error },
+      );
+    }
+  },
+  /** Every play a session owns, gone — the counterpart to deleting the account itself. */
+  deleteForSession(sessionId) {
+    db.prepare('DELETE FROM plays WHERE session_id = ?').run(sessionId);
+  },
+};
+
+export const users = {
+  get(id) {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id) ?? null;
+  },
+  byGoogleSub(sub) {
+    return db.prepare('SELECT * FROM users WHERE google_sub = ?').get(sub) ?? null;
+  },
+  /** Creates the account on first sign-in, or refreshes the profile fields on every one after. */
+  upsert({ sub, email, name }) {
+    db.prepare(
+      `INSERT INTO users (google_sub, email, name) VALUES (?, ?, ?)
+       ON CONFLICT(google_sub) DO UPDATE SET
+         email = excluded.email, name = excluded.name, updated_at = datetime('now')`,
+    ).run(sub, email ?? '', name ?? '');
+    return this.byGoogleSub(sub);
+  },
+  all() {
+    return db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+  },
+  remove(id) {
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
   },
 };

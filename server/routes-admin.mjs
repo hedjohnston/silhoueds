@@ -4,7 +4,7 @@ import express from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { players, schedule, plays, CATEGORIES } from './db.mjs';
+import { players, schedule, plays, users, CATEGORIES } from './db.mjs';
 import {
   checkPassword, issueAdminCookie, clearAdminCookie, isAdmin, requireAdmin,
   loginDelay, recordFailedLogin, clearFailedLogins,
@@ -200,6 +200,25 @@ adminRouter.get('/players', (req, res) => {
     hints: hintCatalog(),
     today: todayKey(new Date(), zoneOf(req)),
   });
+});
+
+// Accounts, for visibility rather than management — there is nothing to edit about one, only
+// whether it should exist. Nothing about gameplay depends on this list.
+adminRouter.get('/users', (req, res) => {
+  res.json({ users: users.all() });
+});
+
+/**
+ * A genuine "forget me": the account and every round it ever played, gone. Without also clearing
+ * `plays`, deleting the row here would just orphan the history under a `user:<id>` that no longer
+ * resolves to anyone — quietly still on disk rather than actually removed.
+ */
+adminRouter.delete('/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!users.get(id)) return res.status(404).json({ error: 'No such user' });
+  plays.deleteForSession(`user:${id}`);
+  users.remove(id);
+  res.json({ ok: true });
 });
 
 /**

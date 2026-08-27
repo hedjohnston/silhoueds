@@ -153,6 +153,11 @@
     <nav class="footer-nav">
       <button class="link" id="stats-button" type="button">Your stats</button>
       <button class="link" id="archive-button" type="button">Past puzzles</button>
+      <!-- Optional, and only ever a link away: signing in just makes the stats above follow you
+           to another device instead of starting over there. Nothing else about the game changes. -->
+      <span class="link" id="auth-status" hidden></span>
+      <button class="link" id="auth-signout" type="button" hidden>Sign out</button>
+      <a class="link" id="auth-signin" href="/api/auth/google/start" hidden>Sign in with Google</a>
     </nav>
 
     <dialog class="sheet" id="sheet">

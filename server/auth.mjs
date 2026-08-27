@@ -131,20 +131,85 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
+const PLAY_COOKIE_TTL_MS = 400 * 24 * 60 * 60 * 1000;
+
+function playCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: PLAY_COOKIE_TTL_MS,
+  };
+}
+
+function setPlaySession(res, id) {
+  res.cookie(PLAY_COOKIE, stamp(id), playCookieOptions());
+}
+
 /**
  * A stable anonymous id for one browser, so the server can hold that visitor's progress.
  * Issued on first contact and carried in a signed cookie.
+ *
+ * A signed-in visitor's id looks exactly the same to everything downstream — it is just a
+ * `"user:<id>"` string rather than a random uuid, stamped in by switchPlaySession on sign-in
+ * rather than minted here. Nothing that reads session_id (loadRound, submitGuess, statsFor, the
+ * `plays` table) needs to know or care which kind it is.
  */
 export function playSession(req, res) {
   const existing = unstamp(req.cookies?.[PLAY_COOKIE]);
   if (existing) return existing;
 
   const id = crypto.randomUUID();
-  res.cookie(PLAY_COOKIE, stamp(id), {
+  setPlaySession(res, id);
+  return id;
+}
+
+/** Reads the play session without minting one — for checks that shouldn't cookie a new visitor. */
+export function peekPlaySession(req) {
+  return unstamp(req.cookies?.[PLAY_COOKIE]);
+}
+
+/** Re-stamps the play cookie to a new id — how a browser links itself to an account on sign-in. */
+export function switchPlaySession(res, id) {
+  setPlaySession(res, id);
+}
+
+/** Signing out: the next request mints a fresh anonymous id, same as a first-ever visitor. */
+export function clearPlaySession(res) {
+  res.clearCookie(PLAY_COOKIE, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 400 * 24 * 60 * 60 * 1000,
   });
-  return id;
+}
+
+// --- Google OAuth state -----------------------------------------------------
+//
+// A short-lived signed cookie standing in for server-side session storage, the same trade this
+// file already makes everywhere else. Set on /start, checked and consumed on /callback — good
+// for exactly one round trip, so a captured callback URL can't be replayed.
+
+const OAUTH_STATE_COOKIE = 'silhoueds_oauth_state';
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+export function issueOAuthState(res) {
+  const state = crypto.randomUUID();
+  res.cookie(OAUTH_STATE_COOKIE, stamp(state), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: OAUTH_STATE_TTL_MS,
+  });
+  return state;
+}
+
+/** Verifies `candidate` against the state cookie and clears it either way — one use only. */
+export function consumeOAuthState(req, res, candidate) {
+  const expected = unstamp(req.cookies?.[OAUTH_STATE_COOKIE]);
+  res.clearCookie(OAUTH_STATE_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+  return Boolean(expected) && typeof candidate === 'string' && expected === candidate;
 }

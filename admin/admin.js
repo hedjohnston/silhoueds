@@ -11,7 +11,7 @@ const dom = Object.fromEntries(
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
     'storage-alarm', 'insights', 'insight-category', 'insight-date',
-    'archive-played',
+    'archive-played', 'accounts',
   ].map((id) => [id, el(id)]),
 );
 
@@ -582,6 +582,7 @@ async function refresh() {
   renderPlayers();
   await refreshSchedule();
   await refreshInsightDates().catch(() => {});
+  await refreshAccounts().catch(() => {});
 }
 
 async function refreshSchedule() {
@@ -612,6 +613,39 @@ async function refreshSchedule() {
     row.className = 'empty';
     row.textContent = `Today: ${stats.plays} played, ${stats.wins ?? 0} solved.`;
     dom.schedule.append(row);
+  }
+}
+
+async function refreshAccounts() {
+  const { users: accounts } = await api('/api/admin/users');
+  dom.accounts.innerHTML = '';
+  if (accounts.length === 0) {
+    dom.accounts.innerHTML = '<li class="empty">Nobody has signed in yet.</li>';
+    return;
+  }
+  for (const account of accounts) {
+    const row = document.createElement('li');
+
+    const who = document.createElement('span');
+    who.className = 'account-who';
+    const name = document.createElement('span');
+    name.textContent = account.name || '(no name given)';
+    const email = document.createElement('span');
+    email.className = 'account-email';
+    email.textContent = account.email || '(no email given)';
+    who.append(name, email);
+
+    const remove = document.createElement('button');
+    remove.className = 'ghost danger';
+    remove.textContent = 'Delete';
+    remove.onclick = async () => {
+      if (!confirm(`Delete this account and everything it's played? This cannot be undone.`)) return;
+      await api(`/api/admin/users/${account.id}`, { method: 'DELETE' });
+      await refreshAccounts();
+    };
+
+    row.append(who, remove);
+    dom.accounts.append(row);
   }
 }
 
