@@ -21,8 +21,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The gate. Without this a syntax error reaches production and is only caught by the health
+  # check, after the machine has already been replaced.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the engines floor in package.json — node:sqlite and node:test are built in.
+          node-version: '22.x'
+
+      - run: npm ci
+      - run: npm test
+
   deploy:
     name: Deploy to Fly.io
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
