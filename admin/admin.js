@@ -152,8 +152,8 @@ function hintRow({ label, value, fixed }) {
 }
 
 /**
- * The hint editor for one player: their category's fixed rungs, then any hint category invented
- * for them, in the order the game reveals them.
+ * The hint editor for one player: any hint category invented for them, then their category's
+ * fixed rungs — the order the game reveals them in.
  *
  * A rung the category has no use for is simply absent — a Premier League player has no League row,
  * because every player in that game is in that league. A League hint stored before the split is
@@ -174,12 +174,13 @@ function buildHintEditor(player, chosenCategory) {
   const draw = (values) => {
     list.innerHTML = '';
     rows = [];
-    const ladder = hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard;
-    for (const label of ladder) add({ label, value: values.get(label) ?? '', fixed: true });
-    // Anything off the standard ladder is one of yours, and stays yours whatever the category.
+    // Yours lead, matching the order the game reveals them in — anything off the standard ladder
+    // is one of yours, and stays yours whatever the category.
     for (const [label, value] of values) {
       if (!hintCatalog.standard.includes(label)) add({ label, value, fixed: false });
     }
+    const ladder = hintCatalog.ladders[chosenCategory()] ?? hintCatalog.standard;
+    for (const label of ladder) add({ label, value: values.get(label) ?? '', fixed: true });
   };
 
   /** What is on screen right now, so a redraw doesn't discard half-typed edits. */
@@ -198,7 +199,13 @@ function buildHintEditor(player, chosenCategory) {
   addCategory.type = 'button';
   addCategory.className = 'ghost add-hint';
   addCategory.textContent = 'Add hint category';
-  addCategory.onclick = () => add({ label: '', value: '', fixed: false }).node.querySelector('input').focus();
+  // A new one belongs at the head of the list, where it will be revealed from.
+  addCategory.onclick = () => {
+    const row = hintRow({ label: '', value: '', fixed: false });
+    rows.unshift(row);
+    list.prepend(row.node);
+    row.node.querySelector('input').focus();
+  };
 
   return {
     list,

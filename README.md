@@ -57,7 +57,8 @@ images** to swap either image later.
 A Premier League player has no **League** row: every player in that game is in that league, so the
 hint would burn a guess for nothing. **Add hint category** puts something of your own in its place
 — *Trophy cabinet*, *International caps*, whatever fits — and a category invented once is offered
-to every other card. Custom hints reveal after the fixed ladder. Moving a player between games
+to every other card. Your own hint leads the ladder — it is written for that one footballer rather
+than drawn from a list they all answer, so it gives least away. Moving a player between games
 redraws their rungs on the spot; a League hint stored before the split is ignored by the game
 immediately, and drops away the next time the card is saved.
 
@@ -104,7 +105,7 @@ Hard mode is unaffected: its photo is never sent early.
   of groups. The ladder lives in `server/hints.mjs`, and the reveal sorts by it rather than
   trusting stored order, so changing it takes effect for players already in the database. Each game
   gets the ladder it can use — the Premier League puzzle drops the league rung — and any hint
-  category invented in the admin reveals after the fixed ones.
+  category invented in the admin reveals ahead of the fixed ones.
 - **Stats** — played, win rate, current and best streak, and the spread of guesses used on wins.
   Held per browser against the anonymous session cookie; there is no cross-player leaderboard.
 - **Past puzzles** — an archive of days that actually ran, so someone joining late can catch up.

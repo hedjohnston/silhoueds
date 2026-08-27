@@ -29,13 +29,17 @@ export function hintLabelsFor(category) {
  *
  * Players saved before the order changed still hold their hints in the old sequence, and the
  * admin lets them be edited by hand into any order at all, so the reveal sorts rather than
- * trusting what is stored. Anything with an unrecognised label — a hint category invented in the
- * admin for one player — sorts to the end rather than being dropped.
+ * trusting what is stored.
+ *
+ * A hint category invented in the admin leads the ladder. It is written for one player rather
+ * than drawn from a list every footballer answers, so it is the vaguest thing on offer to anyone
+ * who doesn't already know the answer — which is exactly what the first rung is for. Several of
+ * them keep the order they were entered in, since `sort` is stable and they all rank alike.
  */
 export function inLadderOrder(hints = []) {
   const rank = (hint) => {
     const index = HINT_LABELS.indexOf(hint?.label);
-    return index === -1 ? HINT_LABELS.length : index;
+    return index === -1 ? -1 : index;
   };
   return [...hints].sort((a, b) => rank(a) - rank(b));
 }

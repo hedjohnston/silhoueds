@@ -24,12 +24,22 @@ test('a shuffled set is sorted back into ladder order', () => {
   assert.deepEqual(labelsOf(shuffled), HINT_LABELS);
 });
 
-test('an unrecognised label sorts to the end rather than being dropped', () => {
+test('a label off the standard ladder leads it rather than being dropped', () => {
   const hints = [
     { label: 'Trophy cabinet', value: 'Premier League 1995' },
     { label: 'Era', value: 'The 90s' },
   ];
-  assert.deepEqual(labelsOf(hints), ['Era', 'Trophy cabinet']);
+  assert.deepEqual(labelsOf(hints), ['Trophy cabinet', 'Era']);
+});
+
+test('several invented categories keep the order they were entered in', () => {
+  // Stable sort: they all rank alike, so the admin's own sequence is the reveal sequence.
+  const hints = [
+    { label: 'Nickname', value: 'Shear' },
+    { label: 'Era', value: 'The 90s' },
+    { label: 'Trophy cabinet', value: 'Two titles' },
+  ];
+  assert.deepEqual(labelsOf(hints), ['Nickname', 'Trophy cabinet', 'Era']);
 });
 
 test('sorting does not mutate the array it was given', () => {
@@ -82,7 +92,7 @@ test('the same hints in the other game keep their League rung, in ladder order',
   assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Position', 'League']);
 });
 
-test('a hint category of your own survives, and reveals last', () => {
+test('a hint category of your own survives, and reveals first', () => {
   const player = {
     category: 'premier-league',
     hints: [
@@ -91,7 +101,7 @@ test('a hint category of your own survives, and reveals last', () => {
       { label: 'Era', value: 'The 90s' },
     ],
   };
-  assert.deepEqual(playableHints(player).map((h) => h.label), ['Era', 'Trophy cabinet']);
+  assert.deepEqual(playableHints(player).map((h) => h.label), ['Trophy cabinet', 'Era']);
 });
 
 test('a player with no hints or no category is handled without throwing', () => {
