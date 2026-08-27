@@ -148,22 +148,26 @@ body {
 
 /* --- docking ---------------------------------------------------------------
 
-   A round is three things stacked: the art, a middle that grows a hint per miss, and the input.
-   Left in normal flow the middle wins — by the sixth guess the art has been pushed off the top of
-   a phone and the input has walked down past the fold, so the two halves of the puzzle you
-   actually need are never on screen together.
+   A round is three things stacked: the art, a middle that grows a hint per miss, and the guess
+   controls. Left in normal flow the middle wins — by the sixth guess the art has been pushed off
+   the top of a phone, so the puzzle you're actually solving is never on screen while you read
+   what you've learned about it.
 
-   So both ends dock and the middle scrolls between them. The docks carry the page's own
-   background because content passes underneath, and they extend past the panels they hold to
-   cover the hard offset shadow, which would otherwise show a sliver of moving text.
+   Only the art docks now. The guess controls used to dock too, sticky-bottom, back when a guess
+   meant focusing a text field and the platform keyboard would swallow up to a third of the
+   screen the moment you tapped it — losing the dock then meant losing the input entirely, off
+   the bottom of a keyboard that had just eaten the space it was sitting in. The on-screen
+   keyboard below replaced that: nothing native ever opens, so nothing sudden ever eats the
+   screen, and the keyboard sits right after the hint panel rather than at a fixed distance from
+   it — reachable with a short scroll, not lost behind one. It also roughly doubled the height of
+   everything below the dots, which would have put a stuck stage and a stuck keyboard close
+   enough to collide with the masthead between them on every phone this used to work on.
 
-   Only while the round is live: `data-round="over"` releases both, because the reveal and the
-   stats want the full screen and there is nothing left to type. And each only where it fits —
-   the art docks from 600px of viewport up, the input needs more, and the two thresholds are set
-   out where they are used below. */
+   Only while the round is live: `data-round="over"` releases it, because the reveal and the
+   stats want the full screen. And only where it fits — a short screen (or a short desktop
+   window; height is what runs out, not width) keeps the plain document instead. */
 
-body[data-round='live'] .stage-dock,
-body[data-round='live'] .compose-dock {
+body[data-round='live'] .stage-dock {
   position: static;
 }
 
@@ -183,38 +187,6 @@ body[data-round='live'] .compose-dock {
   }
 }
 
-/*
- * The input docks only where both docks fit at once.
- *
- * At the top of a round the masthead is still on screen, so the two docks and the stage are
- * competing for the same viewport, and below this they do not all fit however small the masthead
- * gets — the stage and the dock alone come to most of a short phone. Pinning the input anyway is
- * what put it on top of the stage and cut the figure's legs off.
- *
- * Two thresholds, because the note under the toggle is sometimes two lines. "Easy mode needs a
- * photo, and today's puzzle has none." wraps on a narrow screen and costs the masthead another
- * row, so a phone wide enough to keep that on one line needs 800px and a narrower one needs 860px
- * to absorb the wrap. A single conservative number would have cost the most common iPhone its
- * docked input for a wrap that never happens at that width.
- *
- * So a short screen keeps the one that matters. The art stays docked from 600px up, which is the
- * complaint this all started with; the input goes back to scrolling with the page, which is no
- * worse than it ever was.
- */
-@media (min-height: 860px), (min-height: 800px) and (min-width: 370px) {
-  body[data-round='live'] .compose-dock {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-    margin-bottom: calc(-1 * clamp(10px, 3vw, 32px));
-    padding-bottom: clamp(10px, 3vw, 32px);
-    padding-top: 6px;
-    background: var(--ground);
-  }
-}
-
-/* The dock is a plain wrapper the rest of the time, so its children keep the spacing they had
-   as direct children of the card. */
 .compose-dock {
   display: flex;
   flex-direction: column;
@@ -498,6 +470,42 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .primary { padding: 13px 26px; background: var(--pink); font-size: 17px; }
 
 .ghost { width: 100%; padding: 12px; background: #fff; font-size: 16px; }
+
+/* --- on-screen keyboard ------------------------------------------------------
+
+   The guess field is `readonly`, so nothing native ever pops up to type into it — this is what
+   typing means now, on touch and on desktop alike. A key's width comes from its own row (each
+   row is its own flex container), so the ten-wide top row and the seven-wide bottom letter row
+   size themselves to the same viewport without either overflowing or leaving a gap, the way a
+   real keyboard's ragged row lengths do. */
+
+.keyboard { display: flex; flex-direction: column; gap: 6px; }
+
+.keyboard-row { display: flex; gap: 5px; }
+
+.key {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0;
+  border-width: 2px;
+  border-radius: 10px;
+  box-shadow: 2px 2px 0 0 var(--line);
+  background: #fff;
+  font-size: 14px;
+}
+
+.key:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: 1px 1px 0 0 var(--line); }
+
+/* Wider than a letter: these two carry more weight (delete undoes a whole letter; space is
+   between every name) but shouldn't cost a row of their own. */
+.key-backspace { flex: 1.6; font-size: 16px; }
+.key-skip { flex: 1.6; background: var(--grey-light); font-size: 13px; }
+.key-space { flex: 4; }
+
+/* Mirrors the input/keyboard disabling during a request — otherwise a tap queued mid-flight
+   would land on the next round's guess instead of this one's. */
+.keyboard-disabled { opacity: 0.5; pointer-events: none; }
 
 /* --- result --- */
 

@@ -10,6 +10,7 @@ const dom = {
   history: el('guess-history'),
   form: el('guess-form'),
   input: el('guess-input'),
+  keyboard: el('keyboard'),
   skip: el('skip-button'),
   notice: el('notice'),
   result: el('result'),
@@ -374,7 +375,7 @@ function render() {
   dom.notice.hidden = state.finished;
 
   dom.form.hidden = state.finished;
-  dom.skip.hidden = state.finished;
+  dom.keyboard.hidden = state.finished;
   dom.result.hidden = !state.finished;
 
   // Drives the docking in CSS. Only a live round pins the art and the input: once it is over the
@@ -395,11 +396,23 @@ function notify(message) {
   dom.notice.textContent = message ?? '';
 }
 
+/** The two things the on-screen keyboard and a physical one both do, however the key arrived. */
+function typeChar(char) {
+  if (!state || state.finished || dom.input.disabled) return;
+  dom.input.value += char;
+}
+
+function backspaceChar() {
+  if (!state || state.finished || dom.input.disabled) return;
+  dom.input.value = dom.input.value.slice(0, -1);
+}
+
 async function send(path, body) {
   // `!state` covers the no-round case, where the finally below would read state.finished.
   if (busy || !state || state.finished) return;
   busy = true;
   dom.input.disabled = true;
+  dom.keyboard.classList.add('keyboard-disabled');
   try {
     const next = await api(path, {
       method: 'POST',
@@ -415,6 +428,7 @@ async function send(path, body) {
   } finally {
     busy = false;
     dom.input.disabled = false;
+    dom.keyboard.classList.remove('keyboard-disabled');
     if (!state.finished) dom.input.focus();
   }
 }
@@ -680,7 +694,7 @@ function showNoRound(message) {
 
   dom.guessesLeft.hidden = true;
   dom.form.hidden = true;
-  dom.skip.hidden = true;
+  dom.keyboard.hidden = true;
   dom.result.hidden = true;
 
   // The category tabs stay live so the player can get back to one that has a puzzle.
@@ -728,6 +742,36 @@ async function init() {
     if (guess) send('/api/guess', { guess });
   });
   dom.skip.addEventListener('click', () => send('/api/skip'));
+
+  // Every on-screen key lands here; typeChar/backspaceChar are the same two functions a physical
+  // keyboard calls below, so it doesn't matter which one a guess was typed on.
+  dom.keyboard.addEventListener('click', (event) => {
+    const key = event.target.closest('.key[data-key]');
+    if (!key) return;
+    if (key.dataset.key === 'Backspace') backspaceChar();
+    else typeChar(key.dataset.key);
+  });
+
+  // A physical keyboard still works, but only while the guess field itself is the focused
+  // element — otherwise Space/Enter on a focused mode toggle or dot would type into the guess
+  // instead of doing what that control does. Enter is left alone: a text input inside a form
+  // submits it natively on Enter, readonly or not.
+  document.addEventListener('keydown', (event) => {
+    if (!state || state.finished || dom.form.hidden || dom.input.disabled) return;
+    if (document.activeElement !== dom.input) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      backspaceChar();
+    } else if (event.key === ' ') {
+      event.preventDefault();
+      typeChar(' ');
+    } else if (event.key.length === 1 && /[a-z]/i.test(event.key)) {
+      event.preventDefault();
+      typeChar(event.key.toUpperCase());
+    }
+  });
+
   for (const button of dom.share) button.addEventListener('click', share);
   dom.modeHard.addEventListener('click', () => chooseMode('hard'));
   dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
