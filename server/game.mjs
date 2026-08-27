@@ -275,6 +275,9 @@ export function publicState(player, play) {
     silhouette: player.silhouette_image ? null : player.silhouette,
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
+    // A goal, a moment — the admin's pick, shown next to the answer once there's an answer to
+    // show it next to.
+    videoId: finished && player.video_id ? player.video_id : null,
     hints: revealedHints(player, guesses, finished),
     // How many exist in total, so the panel can show how much help is left.
     hintsTotal: playableHints(player).length,

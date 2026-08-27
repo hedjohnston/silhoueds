@@ -153,21 +153,30 @@ test('hasArtwork accepts either an upload or a traced outline', () => {
 
 // --- publicState: what the browser is allowed to know --------------------
 
-test('an unfinished round never carries the answer or the reveal photo', () => {
-  const player = { name: 'Alan Shearer', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
+test('an unfinished round never carries the answer, the reveal photo, or the video', () => {
+  const player = { name: 'Alan Shearer', hints: HINTS, reveal_image: 'r.png', video_id: 'dQw4w9WgXcQ', silhouette: '<svg/>' };
   const state = publicState(player, { date: '2026-08-27', guesses: [guess('Wrong')], finished: false });
 
   assert.equal(state.answer, undefined);
   assert.equal(state.revealUrl, null);
+  assert.equal(state.videoId, null);
   assert.equal(state.finished, false);
 });
 
-test('the answer arrives only once the round is over', () => {
-  const player = { name: 'Alan Shearer', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
+test('the answer, the reveal photo and the video all arrive once the round is over', () => {
+  const player = { name: 'Alan Shearer', hints: HINTS, reveal_image: 'r.png', video_id: 'dQw4w9WgXcQ', silhouette: '<svg/>' };
   const state = publicState(player, { date: '2026-08-27', guesses: [guess('Alan Shearer', true)], finished: true, won: true });
 
   assert.equal(state.answer, 'Alan Shearer');
   assert.equal(state.revealUrl, '/api/puzzle/reveal');
+  assert.equal(state.videoId, 'dQw4w9WgXcQ');
+});
+
+test('a finished round with no video on file just has none, not an error', () => {
+  const player = { name: 'Alan Shearer', hints: HINTS, silhouette: '<svg/>' };
+  const state = publicState(player, { date: '2026-08-27', guesses: [guess('Alan Shearer', true)], finished: true, won: true });
+
+  assert.equal(state.videoId, null);
 });
 
 test('hard mode releases one hint per miss, and a skip counts as a miss', () => {

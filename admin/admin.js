@@ -388,6 +388,18 @@ function renderPlayers() {
     aliasLabel.textContent = 'Also accepted';
     aliasLabel.append(aliasField);
 
+    // Any link the admin might paste — watch, share, shorts, embed — or a bare video id; the
+    // server does the parsing and rejects anything it doesn't recognise as YouTube.
+    const videoField = document.createElement('input');
+    videoField.className = 'aliases';
+    videoField.value = player.video_id ?? '';
+    videoField.placeholder = 'YouTube link — a goal, a moment (optional)';
+
+    const videoLabel = document.createElement('label');
+    videoLabel.className = 'alias-label';
+    videoLabel.textContent = 'Video, shown with the reveal';
+    videoLabel.append(videoField);
+
     const categoryLabelField = document.createElement('label');
     categoryLabelField.className = 'alias-label';
     categoryLabelField.textContent = 'Category';
@@ -417,6 +429,7 @@ function renderPlayers() {
             hints: hintEditor.read(),
             category: categoryField.value,
             aliases: aliasField.value.split(',').map((a) => a.trim()).filter(Boolean),
+            videoUrl: videoField.value.trim(),
           },
         });
         await refresh();
@@ -467,7 +480,7 @@ function renderPlayers() {
     };
 
     actions.append(replace, trace, save, publish, archive, remove);
-    details.append(hintEditor.list, hintEditor.caption, aliasLabel, categoryLabelField, actions);
+    details.append(hintEditor.list, hintEditor.caption, aliasLabel, videoLabel, categoryLabelField, actions);
     const opening = buildEasyOpening(player);
     body.append(art, ...(opening ? [opening] : []), details);
     card.append(summary, body);

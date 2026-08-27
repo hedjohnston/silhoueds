@@ -37,14 +37,21 @@
       <h1 class="logo">Silhoueds</h1>
       <p class="tagline">Name the footballer from their shadow.</p>
       <p class="date" id="puzzle-date"></p>
-      <!-- Which puzzle and which mode used to be two pill rows sitting between the masthead and
-           the puzzle — set once a round and then just spending height. A tap-in-once-a-round
-           setting doesn't need to stay on screen; the summary line does the same job in one row
-           and the controls themselves moved into the sheet below. -->
-      <button class="link settings-trigger" id="settings-trigger" type="button">
-        <span id="settings-summary"></span>
-      </button>
     </header>
+
+    <!-- Which puzzle stays visible and prominent — it's a different game, not a setting. -->
+    <div class="modes" id="categories" role="group" aria-label="Category">
+      <button class="mode" id="category-pl" type="button" data-category="premier-league" aria-pressed="false">Premier League</button>
+      <button class="mode" id="category-intl" type="button" data-category="international" aria-pressed="true">The Rest</button>
+    </div>
+
+    <!-- Difficulty used to be a second pill row plus a note line here, every round, on every
+         screen — set once and then just spending height. A tap-once-a-round setting doesn't need
+         to stay on screen; this summary does the same job in one line, and the pills themselves
+         moved into the sheet below. -->
+    <button class="link settings-trigger" id="settings-trigger" type="button">
+      <span id="settings-summary"></span>
+    </button>
 
     <!-- The art and the input are the two things you need at the same time; the hints and the
          transcript between them are reference that grows by a row per guess. Each is docked so
@@ -132,6 +139,9 @@
     <section class="result" id="result" hidden aria-live="polite">
       <h2 class="result-title" id="result-title"></h2>
       <p class="result-name" id="result-name"></p>
+      <!-- The admin's pick for this player — a goal, a moment — built up only once there's one to
+           show, so a round with none never asks a browser to reach out to YouTube for nothing. -->
+      <div class="result-video" id="result-video" hidden></div>
       <button class="primary share-button" type="button">Share result</button>
       <p class="share-status" aria-live="polite"></p>
       <div class="stats" id="stats"></div>
@@ -156,12 +166,7 @@
          the listeners game.js already attached to them once at init. -->
     <dialog class="sheet" id="settings-sheet">
       <form method="dialog" class="sheet-close"><button aria-label="Close">✕</button></form>
-      <h2 class="sheet-title">Puzzle settings</h2>
-
-      <div class="modes" id="categories" role="group" aria-label="Category">
-        <button class="mode" id="category-pl" type="button" data-category="premier-league" aria-pressed="false">Premier League</button>
-        <button class="mode" id="category-intl" type="button" data-category="international" aria-pressed="true">The Rest</button>
-      </div>
+      <h2 class="sheet-title">Difficulty</h2>
 
       <div class="modes" id="modes" role="group" aria-label="Difficulty">
         <button class="mode" id="mode-hard" type="button" data-mode="hard" aria-pressed="true">Hard</button>

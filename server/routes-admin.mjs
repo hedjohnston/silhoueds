@@ -22,6 +22,33 @@ function categoryOf(req) {
 }
 
 /**
+ * Pull the 11-character id out of whatever YouTube link the admin pasted — a watch, share,
+ * shorts or embed URL, with or without a timestamp/playlist tacked on — or accept a bare id
+ * typed directly. Only the id is ever stored, so the client only ever builds its own embed URL
+ * from 11 characters that are already known to be exactly that shape; there is no admin-supplied
+ * URL for it to reflect.
+ */
+function parseYoutubeId(input) {
+  const trimmed = String(input ?? '').trim();
+  if (/^[\w-]{11}$/.test(trimmed)) return trimmed;
+  let url;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.hostname === 'youtu.be') {
+    const id = url.pathname.slice(1);
+    return /^[\w-]{11}$/.test(id) ? id : null;
+  }
+  if (!/(^|\.)youtube(-nocookie)?\.com$/.test(url.hostname)) return null;
+  const v = url.searchParams.get('v');
+  if (v) return /^[\w-]{11}$/.test(v) ? v : null;
+  const path = url.pathname.match(/^\/(?:embed|shorts)\/([\w-]{11})/);
+  return path ? path[1] : null;
+}
+
+/**
  * The only types we accept, and the extension each is stored under.
  *
  * The extension comes from this map rather than from the uploaded filename. `originalname` is
@@ -286,6 +313,16 @@ adminRouter.patch('/players/:id', (req, res) => {
     fields.hint_source = 'manual';
   }
   if (typeof req.body.silhouette === 'string') fields.silhouette = req.body.silhouette;
+  if (typeof req.body.videoUrl === 'string') {
+    const raw = req.body.videoUrl.trim();
+    if (!raw) {
+      fields.video_id = null;
+    } else {
+      const id = parseYoutubeId(raw);
+      if (!id) return res.status(400).json({ error: "That doesn't look like a YouTube link." });
+      fields.video_id = id;
+    }
+  }
   if (typeof req.body.category === 'string' && CATEGORIES.includes(req.body.category)) {
     fields.category = req.body.category;
   }

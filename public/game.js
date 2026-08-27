@@ -16,6 +16,7 @@ const dom = {
   result: el('result'),
   resultTitle: el('result-title'),
   resultName: el('result-name'),
+  resultVideo: el('result-video'),
   share: Array.from(document.querySelectorAll('.share-button')),
   shareStatus: Array.from(document.querySelectorAll('.share-status')),
   puzzleDate: el('puzzle-date'),
@@ -213,11 +214,10 @@ function renderModes() {
       : '';
 }
 
-/** The one line standing in for the two pill rows now tucked inside the settings sheet. */
+/** The one line standing in for the difficulty pills now tucked inside the settings sheet. */
 function renderSettingsSummary() {
-  const categoryLabel = category === 'premier-league' ? dom.categoryPL.textContent : dom.categoryIntl.textContent;
   const modeLabel = (state?.mode ?? preferredMode()) === 'easy' ? dom.modeEasy.textContent : dom.modeHard.textContent;
-  dom.settingsSummary.textContent = `${categoryLabel} · ${modeLabel}`;
+  dom.settingsSummary.textContent = `Difficulty · ${modeLabel}`;
 }
 
 async function chooseMode(mode) {
@@ -363,6 +363,26 @@ function renderCaption() {
   dom.guessesLeft.hidden = text === '';
 }
 
+/**
+ * The admin's pick for this player, next to the reveal. Only built once there's a video to show
+ * — an iframe left in the DOM would ask a browser to reach out to YouTube for nothing on every
+ * round that has none, and there's no reason to pay that cost on the common case.
+ */
+function renderResultVideo() {
+  dom.resultVideo.innerHTML = '';
+  dom.resultVideo.hidden = !state.videoId;
+  if (!state.videoId) return;
+
+  const frame = document.createElement('iframe');
+  frame.src = `https://www.youtube-nocookie.com/embed/${state.videoId}`;
+  frame.title = `Video: ${state.answer ?? 'the reveal'}`;
+  frame.loading = 'lazy';
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.allow = 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+  frame.allowFullscreen = true;
+  dom.resultVideo.append(frame);
+}
+
 // How many guesses were on screen last time, so a new one can close whatever dot was being held
 // open without a re-render for any other reason (a mode switch, a reload) doing the same.
 let shownGuesses = 0;
@@ -396,6 +416,7 @@ function render() {
   if (state.finished) {
     dom.resultTitle.textContent = state.won ? 'Got it!' : 'Out of guesses';
     dom.resultName.textContent = state.answer ?? '';
+    renderResultVideo();
     renderCountdown();
     api('/api/stats')
       .then((stats) => renderStats(dom.stats, stats, state.won ? state.guesses.length : null))

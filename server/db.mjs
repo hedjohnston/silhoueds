@@ -30,6 +30,7 @@ db.exec(`
     silhouette_image TEXT,                            -- uploaded silhouette artwork filename
     photo            TEXT,                            -- uploaded reference photo filename
     reveal_image     TEXT,                            -- full photo, shown once the round is over
+    video_id         TEXT,                            -- YouTube video id, shown once the round is over
     category         TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
     status           TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
                              CHECK (status IN ('draft', 'ready')),
@@ -80,6 +81,7 @@ for (const [name, definition] of [
   ['category', `TEXT NOT NULL DEFAULT '${DEFAULT_CATEGORY}'`],
   // Nobody is archived until someone says so, so every existing player carries forward live.
   ['archived', 'INTEGER NOT NULL DEFAULT 0'],
+  ['video_id', 'TEXT'],          // YouTube video id, shown once the round is over
 ]) {
   if (!hasColumn('players', name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
@@ -274,6 +276,7 @@ export const players = {
       photo: (v) => v,
       silhouette_image: (v) => v,
       reveal_image: (v) => v,
+      video_id: (v) => v,
       status: (v) => v,
       hint_source: (v) => v,
       category: (v) => v,
