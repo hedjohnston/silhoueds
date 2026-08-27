@@ -19,43 +19,55 @@ db.exec(`
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS players (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug          TEXT    NOT NULL UNIQUE,
-    name          TEXT    NOT NULL,
-    aliases       TEXT    NOT NULL DEFAULT '[]',   -- JSON array of accepted spellings
-    hints         TEXT    NOT NULL DEFAULT '[]',   -- JSON array of {label, value}
-    silhouette    TEXT,                            -- SVG markup, when traced or auto-generated
-    photo         TEXT,                            -- uploaded reference photo filename
-    status        TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
-                          CHECK (status IN ('draft', 'ready')),
-    hint_source   TEXT    NOT NULL DEFAULT 'manual', -- manual | claude
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug             TEXT    NOT NULL UNIQUE,
+    name             TEXT    NOT NULL,
+    aliases          TEXT    NOT NULL DEFAULT '[]',   -- JSON array of accepted spellings
+    hints            TEXT    NOT NULL DEFAULT '[]',   -- JSON array of {label, value}
+    silhouette       TEXT,                            -- SVG markup, when traced by hand
+    silhouette_image TEXT,                            -- uploaded silhouette artwork filename
+    photo            TEXT,                            -- uploaded reference photo filename
+    reveal_image     TEXT,                            -- full photo, shown once the round is over
+    category         TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
+    status           TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
+                             CHECK (status IN ('draft', 'ready')),
+    hint_source      TEXT    NOT NULL DEFAULT 'manual',
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
-  -- Which player runs on which date. Filled ahead of time by the admin, or auto-assigned
-  -- on demand from the pool of ready players.
+  -- Which player runs on which date, in which game. Filled ahead of time by the admin, or
+  -- auto-assigned on demand from the pool of ready players. The date is in SILHOUEDS_TIMEZONE
+  -- (or the visitor's own zone), not UTC.
   CREATE TABLE IF NOT EXISTS schedule (
-    date       TEXT PRIMARY KEY,          -- YYYY-MM-DD, UTC
-    player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE
+    date       TEXT    NOT NULL,          -- YYYY-MM-DD
+    category   TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
+    player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    PRIMARY KEY (date, category)
   );
 
-  -- One row per visitor per day. Progress lives server-side so the client never holds the answer.
+  -- One row per visitor per day per game. Progress lives server-side so the client never holds
+  -- the answer.
   CREATE TABLE IF NOT EXISTS plays (
     session_id TEXT    NOT NULL,
     date       TEXT    NOT NULL,
+    category   TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
     guesses    TEXT    NOT NULL DEFAULT '[]',  -- JSON array of {name, correct, skipped}
     finished   INTEGER NOT NULL DEFAULT 0,
     won        INTEGER NOT NULL DEFAULT 0,
+    mode       TEXT    NOT NULL DEFAULT 'hard',
     updated_at TEXT    NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (session_id, date)
+    PRIMARY KEY (session_id, date, category)
   );
 
   CREATE INDEX IF NOT EXISTS plays_by_date ON plays(date);
 `);
 
-// Additive migrations: new columns are appended to existing databases in place.
-const columns = new Set(db.prepare('PRAGMA table_info(players)').all().map((c) => c.name));
+const hasColumn = (table, column) =>
+  db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+
+// Additive migrations: new columns are appended to existing databases in place. A fresh install
+// already has these from the CREATE TABLE above, so none of the migrations below run for it.
 for (const [name, definition] of [
   ['silhouette_image', 'TEXT'],  // uploaded silhouette artwork filename
   ['reveal_image', 'TEXT'],      // full photo, shown once the round is over
@@ -63,21 +75,44 @@ for (const [name, definition] of [
   // League specialists, so that is the default the migration gives them.
   ['category', `TEXT NOT NULL DEFAULT '${DEFAULT_CATEGORY}'`],
 ]) {
-  if (!columns.has(name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
+  if (!hasColumn('players', name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
 
 // Difficulty belongs to the round, not the browser, so it lives on the play.
-const playColumns = new Set(db.prepare('PRAGMA table_info(plays)').all().map((c) => c.name));
-if (!playColumns.has('mode')) {
+if (!hasColumn('plays', 'mode')) {
   db.exec("ALTER TABLE plays ADD COLUMN mode TEXT NOT NULL DEFAULT 'hard'");
 }
 
-// Premier League and International are separate daily games, so `schedule` and `plays` both
-// need `category` folded into their primary key. Sqlite can't alter a primary key in place, so
-// this rebuilds each table the first time it finds one without the column — existing rows carry
-// forward as DEFAULT_CATEGORY, which is exactly what already-playing visitors were doing.
-if (!db.prepare('PRAGMA table_info(schedule)').all().some((c) => c.name === 'category')) {
-  db.exec(`
+/**
+ * Run a table rebuild as one unit, so a crash can't leave the database half-migrated.
+ *
+ * Each of these renames the old table aside, creates the new shape, copies the rows across and
+ * drops the original. Without a transaction every statement autocommits: a machine killed partway
+ * through would come back with the new empty table in place — which satisfies the guard above, so
+ * the next boot skips the migration and the copied-aside rows are stranded for good. Losing the
+ * `plays` table that way costs every visitor their history, so it is worth the extra care.
+ *
+ * A failure rolls back to the original table and rethrows, which stops the server from booting on
+ * a database it could not migrate — far better than serving a half-built one.
+ */
+function migrate(name, statements) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(statements);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw new Error(`Migration "${name}" failed and was rolled back: ${error.message}`, { cause: error });
+  }
+}
+
+// Premier League and International are separate daily games, so `schedule` and `plays` both need
+// `category` folded into their primary key. SQLite can't alter a primary key in place, hence the
+// rebuild. Only databases created before categories existed reach these — a fresh install already
+// has the right shape from the CREATE TABLE above. Existing rows carry forward as
+// DEFAULT_CATEGORY, which is exactly what already-playing visitors were doing.
+if (!hasColumn('schedule', 'category')) {
+  migrate('schedule.category', `
     ALTER TABLE schedule RENAME TO schedule_pre_category;
     CREATE TABLE schedule (
       date       TEXT    NOT NULL,
@@ -91,8 +126,8 @@ if (!db.prepare('PRAGMA table_info(schedule)').all().some((c) => c.name === 'cat
   `);
 }
 
-if (!db.prepare('PRAGMA table_info(plays)').all().some((c) => c.name === 'category')) {
-  db.exec(`
+if (!hasColumn('plays', 'category')) {
+  migrate('plays.category', `
     ALTER TABLE plays RENAME TO plays_pre_category;
     CREATE TABLE plays (
       session_id TEXT    NOT NULL,

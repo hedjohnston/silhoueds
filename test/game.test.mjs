@@ -14,7 +14,7 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'silhoueds-test-'));
 process.env.SILHOUEDS_DB = path.join(scratch, 'test.db');
 process.env.SILHOUEDS_TIMEZONE = 'Australia/Sydney';
 
-const { players, plays, schedule } = await import('../server/db.mjs');
+const { db, players, plays, schedule } = await import('../server/db.mjs');
 const {
   todayKey, resolveRoundDate, statsFor, publicState, hasArtwork, normalizeCategory, MAX_GUESSES,
 } = await import('../server/game.mjs');
@@ -34,6 +34,29 @@ function makePlayer(overrides = {}) {
 
 const guess = (name, correct = false) => ({ name, correct, skipped: false });
 const skip = () => ({ name: '', correct: false, skipped: true });
+
+// --- schema --------------------------------------------------------------
+
+test('a fresh database is created at the current schema, not migrated up to it', () => {
+  // This database was made moments ago by importing db.mjs. If the CREATE TABLE statements were
+  // stale, the category migration would have had to rename and rebuild these tables on first
+  // boot — a destructive operation no new install has any reason to run.
+  const pk = (table) =>
+    db.prepare(`PRAGMA table_info(${table})`).all()
+      .filter((c) => c.pk > 0)
+      .sort((a, b) => a.pk - b.pk)
+      .map((c) => c.name);
+
+  assert.deepEqual(pk('schedule'), ['date', 'category']);
+  assert.deepEqual(pk('plays'), ['session_id', 'date', 'category']);
+
+  for (const column of ['category', 'silhouette_image', 'reveal_image']) {
+    assert.ok(
+      db.prepare('PRAGMA table_info(players)').all().some((c) => c.name === column),
+      `players.${column} missing`,
+    );
+  }
+});
 
 // --- todayKey ------------------------------------------------------------
 
