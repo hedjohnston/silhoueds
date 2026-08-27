@@ -172,12 +172,12 @@ body[data-round='live'] .compose-dock {
     position: sticky;
     top: 0;
     z-index: 2;
-    /* Pulls up into the card's gap so the dock's own background starts at the top of the
-       viewport rather than leaving a strip the hints can be seen sliding through. */
-    margin-top: calc(-1 * clamp(10px, 3vw, 32px));
-    padding-top: clamp(10px, 3vw, 32px);
     /* Clears the 3px offset shadow and then some, so a hint scrolling underneath disappears
-       against the ground rather than being sliced by the stage's own border. */
+       against the ground rather than being sliced by the stage's own border. This dock needs a
+       band at the bottom only: the shadow is offset down and right, and once the dock is stuck
+       its top edge is the top of the viewport, so there is nothing above it to cover. An earlier
+       pull-up into the card's gap covered nothing and, on a short screen where the gap is
+       trimmed, sliced the bottom off the Hard/Easy pill instead. */
     padding-bottom: 14px;
     background: var(--ground);
   }
