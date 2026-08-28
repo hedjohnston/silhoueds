@@ -134,8 +134,11 @@ body {
 .mode:disabled { opacity: 1; color: var(--grey); cursor: not-allowed; }
 .mode-active:disabled { color: var(--ink); opacity: 0.75; }
 
+/* Sits under the pills inside the settings sheet. A plain top margin, not a negative one: the
+   negative was tuning out part of a flex gap back when the pills lived in the card, and the sheet
+   is ordinary block layout with no gap to cancel — so it dragged the note up over the pills. */
 .mode-note {
-  margin: -8px 0 0;
+  margin: 10px 0 0;
   text-align: center;
   font-size: 12px;
   font-weight: 700;
