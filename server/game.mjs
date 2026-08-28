@@ -253,6 +253,17 @@ function fillFor(guesses, finished) {
   return FILL_STEPS[Math.min(misses, FILL_STEPS.length - 1)];
 }
 
+/**
+ * Did this round end because the player asked to see the answer?
+ *
+ * Derived rather than stored, so it needs no column of its own: giving up is only offered while a
+ * round is live, so a finished, lost round with guesses still in hand can only have got there that
+ * way — running out of guesses is the one other way to lose, and it spends all six by definition.
+ */
+function gaveUp(guesses, finished, won) {
+  return finished && !won && guesses.length < MAX_GUESSES;
+}
+
 /** What the browser is allowed to know about the current round. */
 export function publicState(player, play) {
   const guesses = play?.guesses ?? [];
@@ -286,6 +297,8 @@ export function publicState(player, play) {
     maxGuesses: MAX_GUESSES,
     finished,
     won: play?.won ?? false,
+    // So the result can say "You gave up" rather than the "Out of guesses" that isn't true.
+    gaveUp: gaveUp(guesses, finished, play?.won ?? false),
     // The answer crosses the wire only once the round is over.
     answer: finished ? player.name : undefined,
   };
@@ -359,4 +372,30 @@ export function submitGuess(
 
   plays.save(sessionId, date, category, play);
   return { ...publicState(player, { ...play, date }), spelling: matched && !exact };
+}
+
+/**
+ * End the round now and show the answer.
+ *
+ * The way out for a player who is beaten and would rather not spend four skips proving it. It is
+ * a loss like any other — it counts as played, it breaks the streak, and the share grid says X/6
+ * — so it costs exactly what running out of guesses costs and nothing more.
+ *
+ * Guesses already spent are kept as they are: nothing is padded out to six, which is what lets
+ * `gaveUp` above tell the two kinds of loss apart without a column to store it in.
+ */
+export function endRound(sessionId, { timeZone, date: requested, category = DEFAULT_CATEGORY } = {}) {
+  const date = resolveRoundDate(requested, todayKey(new Date(), timeZone), category);
+  if (!date) return null;
+  const round = loadRound(sessionId, date, category);
+  if (!round) return null;
+
+  const { player, play } = round;
+  // Already over — including already won, which giving up must never overwrite.
+  if (play.finished) return { ...publicState(player, { ...play, date }), unchanged: true };
+
+  play.finished = true;
+  play.won = false;
+  plays.save(sessionId, date, category, play);
+  return publicState(player, { ...play, date });
 }

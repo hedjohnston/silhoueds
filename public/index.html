@@ -134,6 +134,11 @@
           <button class="key key-space" type="button" data-key=" ">Space</button>
         </div>
       </div>
+
+      <!-- The way out for someone who is beaten. Deliberately a quiet link rather than a key: it
+           ends the round, so it should never be somewhere a thumb reaching for Space can find it.
+           It asks twice — the second tap is the one that reveals — because there is no undo. -->
+      <button class="link give-up" id="give-up" type="button">Give up</button>
     </div>
 
     <section class="result" id="result" hidden aria-live="polite">

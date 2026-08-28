@@ -502,6 +502,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .key-skip { flex: 1.6; background: var(--yellow); font-size: 13px; }
 .key-space { flex: 4; }
 
+/* Sits under the keyboard, centred and muted — it is an exit, not an action the round is about. */
+.give-up { align-self: center; }
+
+/* Armed: one tap in, waiting for the second. A pastel block with black ink is the idiom the rest
+   of the page uses for "this is a thing", and it makes the state impossible to miss on the one
+   control whose next tap cannot be taken back. */
+.give-up[data-armed='true'] {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--red);
+  color: var(--ink);
+  text-decoration: none;
+}
+
 /* Mirrors the input/keyboard disabling during a request — otherwise a tap queued mid-flight
    would land on the next round's guess instead of this one's. */
 .keyboard-disabled { opacity: 0.5; pointer-events: none; }

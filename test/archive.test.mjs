@@ -170,25 +170,25 @@ test('the hint catalog carries a ladder per game, plus the categories invented s
 });
 
 
-test('the admin refuses a seventh hint rather than storing one nothing can reveal', async () => {
+test('the admin refuses a sixth hint rather than storing one nothing can reveal', async () => {
   const player = players.create({ slug: 'over-full', name: 'Les Ferdinand', category: 'international' });
   const hint = (n) => ({ label: `Category ${n}`, value: `value ${n}` });
 
   const refused = await asAdmin(`/api/admin/players/${player.id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ hints: [1, 2, 3, 4, 5, 6, 7].map(hint) }),
+    body: JSON.stringify({ hints: [1, 2, 3, 4, 5, 6].map(hint) }),
   });
   assert.equal(refused.status, 400);
-  assert.match((await refused.json()).error, /6 hints/);
-  // Refused outright: the seventh does not quietly take the other six down with it.
+  assert.match((await refused.json()).error, /5 hints/);
+  // Refused outright: the sixth does not quietly take the other five down with it.
   assert.deepEqual(players.get(player.id).hints, []);
 
   const accepted = await asAdmin(`/api/admin/players/${player.id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ hints: [1, 2, 3, 4, 5, 6].map(hint) }),
+    body: JSON.stringify({ hints: [1, 2, 3, 4, 5].map(hint) }),
   });
   assert.equal(accepted.status, 200);
-  assert.equal((await accepted.json()).player.hints.length, 6);
+  assert.equal((await accepted.json()).player.hints.length, 5);
 });
 
 test('the same category in two slots is refused rather than revealed twice', async () => {
@@ -228,7 +228,7 @@ test('slots are stored in the order they were sent, not sorted', async () => {
 
 test('the catalog states the cap, and shares invented categories across both games', async () => {
   const { hints } = await (await asAdmin('/api/admin/players')).json();
-  assert.equal(hints.max, 6);
+  assert.equal(hints.max, 5);
   // One list, whichever game a category was written on.
   assert.ok(hints.custom.includes('Trophy cabinet'));
   assert.ok(hints.custom.includes('Category 1'));

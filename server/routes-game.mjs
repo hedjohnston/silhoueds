@@ -5,7 +5,7 @@ import { playSession } from './auth.mjs';
 import { zoneOf } from './request.mjs';
 import {
   loadRound, publicState, submitGuess, todayKey, resolveRoundDate, statsFor, setMode,
-  normalizeCategory,
+  normalizeCategory, endRound,
 } from './game.mjs';
 import { schedule, plays } from './db.mjs';
 import { sendUpload } from './uploads.mjs';
@@ -75,6 +75,16 @@ gameRouter.post('/skip', (req, res) => {
   const state = submitGuess(sessionId, '', {
     skipped: true, timeZone: zoneOf(req), date: req.body?.date, category,
   });
+  if (!state) return res.status(503).json({ error: 'No puzzle is ready yet.' });
+  res.json(state);
+});
+
+// Give up: end the round now and see the answer. A loss, scored exactly as running out of
+// guesses is — the difference is only that it costs the guesses left rather than spending them.
+gameRouter.post('/giveup', (req, res) => {
+  const sessionId = playSession(req, res);
+  const category = categoryOf(req);
+  const state = endRound(sessionId, { timeZone: zoneOf(req), date: req.body?.date, category });
   if (!state) return res.status(503).json({ error: 'No puzzle is ready yet.' });
   res.json(state);
 });

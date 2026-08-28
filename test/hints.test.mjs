@@ -126,8 +126,17 @@ test('a player with no hints or no category is handled without throwing', () => 
 });
 
 
-test('the hint cap matches the guess count, so no hint is unreachable', () => {
-  // Hard mode releases one hint per wrong guess. If these drift apart, a player either carries
-  // hints no round can reach or the ladder runs dry before the guesses do.
-  assert.equal(MAX_HINTS, MAX_GUESSES);
+test('the hint cap leaves a guess to spend on every hint', () => {
+  // A wrong guess releases a hint, so hints land in the gaps between guesses and there are only
+  // MAX_GUESSES - 1 of those. Equal to MAX_GUESSES and the last hint arrives with the answer,
+  // released by the very miss that ended the round; any lower and the ladder runs dry early.
+  assert.equal(MAX_HINTS, MAX_GUESSES - 1);
+});
+
+test('a full ladder is spent by the time the last guess comes round', () => {
+  // The property the cap exists for, stated as the round actually plays it: after MAX_GUESSES - 1
+  // misses every hint is out, and the player still has one guess to use them on.
+  const hints = Array.from({ length: MAX_HINTS }, (_, i) => ({ label: `Category ${i}`, value: `v${i}` }));
+  const played = playableHints({ category: 'international', hints });
+  assert.equal(played.length, MAX_GUESSES - 1);
 });

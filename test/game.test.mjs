@@ -17,6 +17,7 @@ process.env.SILHOUEDS_TIMEZONE = 'Australia/Sydney';
 const { db, players, plays, schedule } = await import('../server/db.mjs');
 const {
   todayKey, resolveRoundDate, statsFor, publicState, hasArtwork, normalizeCategory, MAX_GUESSES,
+  endRound, submitGuess,
 } = await import('../server/game.mjs');
 
 process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -304,6 +305,95 @@ test('hard mode is never given a fill at all', () => {
   const state = publicState(player, { date: '2026-08-27', guesses: [guess('a')], mode: 'hard' });
   assert.equal(state.fill, null);
   assert.equal(state.photoUrl, null);
+});
+
+// --- giving up -----------------------------------------------------------
+
+/** A ready player scheduled on a past date, so a round can be played without touching today. */
+function scheduledRound(date, category = 'international') {
+  const player = makePlayer({ category, silhouette: '<svg/>' });
+  players.update(player.id, { status: 'ready' });
+  schedule.set(date, category, player.id);
+  return player;
+}
+
+test('giving up ends the round as a loss and hands over the answer', () => {
+  const date = '2026-07-01';
+  const player = scheduledRound(date);
+  const session = 'gave-up';
+
+  submitGuess(session, 'Wrong', { date, category: 'international' });
+  const state = endRound(session, { date, category: 'international' });
+
+  assert.equal(state.finished, true);
+  assert.equal(state.won, false);
+  assert.equal(state.gaveUp, true);
+  assert.equal(state.answer, player.name);
+  // The whole ladder, the same as any other finished round.
+  assert.equal(state.hints.length, HINTS.length);
+});
+
+test('giving up keeps the guesses already spent rather than padding them out', () => {
+  // What lets `gaveUp` be derived rather than stored: a loss with guesses in hand can only be
+  // one that was given up on. Padding to MAX_GUESSES would make the two endings identical.
+  const date = '2026-07-02';
+  scheduledRound(date);
+  const session = 'kept-guesses';
+
+  submitGuess(session, 'Wrong', { date, category: 'international' });
+  const state = endRound(session, { date, category: 'international' });
+
+  assert.equal(state.guesses.length, 1);
+  assert.equal(state.guessesLeft, MAX_GUESSES - 1);
+});
+
+test('running out of guesses is a loss, but not one that was given up on', () => {
+  const date = '2026-07-03';
+  scheduledRound(date);
+  const session = 'ran-out';
+
+  let state;
+  for (let n = 0; n < MAX_GUESSES; n++) {
+    state = submitGuess(session, 'Wrong', { date, category: 'international' });
+  }
+
+  assert.equal(state.finished, true);
+  assert.equal(state.won, false);
+  assert.equal(state.gaveUp, false);
+});
+
+test('giving up cannot overwrite a round that was already won', () => {
+  const date = '2026-07-04';
+  const player = scheduledRound(date);
+  const session = 'already-won';
+
+  submitGuess(session, player.name, { date, category: 'international' });
+  const state = endRound(session, { date, category: 'international' });
+
+  assert.equal(state.won, true);
+  assert.equal(state.gaveUp, false);
+  assert.equal(state.unchanged, true);
+});
+
+test('giving up works the same in the Premier League game', () => {
+  // Two independent daily games, so the round it ends has to be the one for that category —
+  // giving up in one must not reach across and finish the other.
+  const date = '2026-07-05';
+  const pl = scheduledRound(date, 'premier-league');
+  scheduledRound(date, 'international');
+  const session = 'both-games';
+
+  const state = endRound(session, { date, category: 'premier-league' });
+  assert.equal(state.gaveUp, true);
+  assert.equal(state.answer, pl.name);
+  assert.equal(state.category, 'premier-league');
+
+  // The Rest is untouched — no round of it was even started, let alone ended.
+  assert.equal(plays.get(session, date, 'international'), undefined);
+});
+
+test('giving up on a date that never ran is refused', () => {
+  assert.equal(endRound('nobody', { date: '2026-06-01', category: 'international' }), null);
 });
 
 // --- statsFor ------------------------------------------------------------

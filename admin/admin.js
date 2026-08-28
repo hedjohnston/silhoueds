@@ -220,11 +220,13 @@ function hintSlot({ label, value }, { offered, taken, onChange }) {
 }
 
 /**
- * The hint editor: six slots, in the order the game reveals them.
+ * The hint editor: five slots, in the order the game reveals them.
  *
- * Six because hard mode releases one per wrong guess and there are only six guesses — a seventh
- * could never be reached. Every slot is free choice, and the order they are left in is the order
- * they are revealed in, so the first slot is what a player earns for their first wrong guess.
+ * Five because a wrong guess releases a hint and there are six guesses — so there are only five
+ * gaps between them, and a sixth hint would arrive with the answer rather than in time to be used.
+ * Every slot is free choice, and the order they are left in is the order they are revealed in, so
+ * the first slot is what a player earns for their first wrong guess. The count comes from the
+ * server (`hints.max`), which owns it.
  */
 function buildHintEditor(player, chosenCategory) {
   const list = document.createElement('ol');
@@ -234,7 +236,7 @@ function buildHintEditor(player, chosenCategory) {
   caption.className = 'hint-tally';
   caption.textContent = 'Revealed in this order, one per wrong guess';
 
-  const max = hintCatalog.max ?? 6;
+  const max = hintCatalog.max ?? 5;
   let slots = [];
 
   /** Everything a slot may be set to: this game's standard categories, then the invented ones. */
@@ -285,7 +287,7 @@ function buildHintEditor(player, chosenCategory) {
 
   draw(player.hints);
 
-  // There is nothing to add: the six slots are always present, filled or not.
+  // There is nothing to add: the slots are always all present, filled or not.
   return {
     list,
     caption,

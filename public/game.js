@@ -12,6 +12,7 @@ const dom = {
   input: el('guess-input'),
   keyboard: el('keyboard'),
   skip: el('skip-button'),
+  giveUp: el('give-up'),
   notice: el('notice'),
   result: el('result'),
   resultTitle: el('result-title'),
@@ -386,6 +387,23 @@ function renderResultVideo() {
   dom.resultVideo.append(frame);
 }
 
+/**
+ * Whether "Give up" has been tapped once and is waiting for the tap that means it.
+ *
+ * Two taps rather than a confirm dialog: nothing else in the game interrupts you with one, and the
+ * armed label says what the next tap does in the same place the first one landed. It disarms on
+ * any other move — a guess, a skip, a new round — so a stray tap can never sit armed waiting to
+ * catch the next one.
+ */
+let giveUpArmed = false;
+
+function renderGiveUp() {
+  // Nothing to give up on once the round is over, and the whole dock is hidden anyway.
+  dom.giveUp.hidden = state.finished;
+  dom.giveUp.dataset.armed = String(giveUpArmed);
+  dom.giveUp.textContent = giveUpArmed ? 'Tap again to see the answer' : 'Give up';
+}
+
 // How many guesses were on screen last time, so a new one can close whatever dot was being held
 // open without a re-render for any other reason (a mode switch, a reload) doing the same.
 let shownGuesses = 0;
@@ -404,6 +422,7 @@ function render() {
 
   renderHistory();
   renderCaption();
+  renderGiveUp();
 
   // Once the round is over this reserves empty space above the result, so drop it.
   dom.notice.hidden = state.finished;
@@ -417,7 +436,12 @@ function render() {
   document.body.dataset.round = state.finished ? 'over' : 'live';
 
   if (state.finished) {
-    dom.resultTitle.textContent = state.won ? 'Got it!' : 'Out of guesses';
+    // Three endings, not two: "Out of guesses" is a lie told to someone who still had some.
+    dom.resultTitle.textContent = state.won
+      ? 'Got it!'
+      : state.gaveUp
+        ? 'Gave up'
+        : 'Out of guesses';
     dom.resultName.textContent = state.answer ?? '';
     renderResultVideo();
     renderCountdown();
@@ -445,6 +469,7 @@ function backspaceChar() {
 async function send(path, body) {
   // `!state` covers the no-round case, where the finally below would read state.finished.
   if (busy || !state || state.finished) return;
+  giveUpArmed = false;
   busy = true;
   dom.input.disabled = true;
   dom.keyboard.classList.add('keyboard-disabled');
@@ -759,9 +784,11 @@ function showNoRound(message) {
   dom.puzzleDate.textContent = '';
   dom.modeNote.textContent = '';
 
+  giveUpArmed = false;
   dom.guessesLeft.hidden = true;
   dom.form.hidden = true;
   dom.keyboard.hidden = true;
+  dom.giveUp.hidden = true;
   dom.result.hidden = true;
 
   // The category tabs stay live so the player can get back to one that has a puzzle.
@@ -773,6 +800,7 @@ function showNoRound(message) {
 
 async function openRound(date) {
   viewingDate = date;
+  giveUpArmed = false;
   notify('');
   try {
     state = await api('/api/puzzle');
@@ -810,6 +838,18 @@ async function init() {
     if (guess) send('/api/guess', { guess });
   });
   dom.skip.addEventListener('click', () => send('/api/skip'));
+
+  // The first tap arms, the second ends the round. `send` clears the flag on the way out, so the
+  // control is back to "Give up" whichever way the request went.
+  dom.giveUp.addEventListener('click', () => {
+    if (!state || state.finished || busy) return;
+    if (!giveUpArmed) {
+      giveUpArmed = true;
+      renderGiveUp();
+      return;
+    }
+    send('/api/giveup');
+  });
 
   // Every on-screen key lands here; typeChar/backspaceChar are the same two functions a physical
   // keyboard calls below, so it doesn't matter which one a guess was typed on.

@@ -1,20 +1,24 @@
 // The standard hint categories, offered in every slot in the admin alongside any invented there.
 //
-// This is a menu, not a running order: the admin arranges the six slots, and the order they are
+// This is a menu, not a running order: the admin arranges the five slots, and the order they are
 // left in is the order they are revealed in. It was a fixed ladder until the slots became free
 // choice, which is why `inLadderOrder` below still exists — see the note on it.
 export const HINT_LABELS = ['Era', 'Position', 'League', 'Nationality', 'Best known at'];
 
 /**
- * The most hints one player can carry.
+ * The most hints one player can carry: one fewer than MAX_GUESSES.
  *
- * Hard mode releases one per wrong guess, and there are only MAX_GUESSES of those, so a seventh
- * could never be reached however the round went. Worse than useless: the panel counts hints off as
- * "2 of 9", advertising help that does not exist. `game.mjs` owns MAX_GUESSES and already imports
- * this module, so the number is stated here rather than imported back — a test holds the two
- * together so they cannot drift apart.
+ * A hint is released by a wrong guess, so it is only worth anything if a guess follows it — and
+ * with six guesses there are only five gaps between them. A sixth hint landed in the same breath
+ * as the answer, since the miss that released it was also the one that ended the round: it could
+ * never be acted on, and the panel counted it off as "5 of 6", promising help that did not exist.
+ * Five means every hint buys at least one more attempt, the last arriving right before the final
+ * guess.
+ *
+ * `game.mjs` owns MAX_GUESSES and already imports this module, so the number is stated here
+ * rather than imported back — a test holds the two together so they cannot drift apart.
  */
-export const MAX_HINTS = 6;
+export const MAX_HINTS = 5;
 
 /**
  * Rungs a category has no use for.
@@ -35,7 +39,7 @@ export function hintLabelsFor(category) {
 }
 
 /**
- * The order hints used to be revealed in, before the admin got six free slots.
+ * The order hints used to be revealed in, before the admin got free slots.
  *
  * This is history, kept for exactly one caller: the migration in `db.mjs` that rewrites stored
  * hints into this order once, so players saved under the old rules keep revealing what they always
