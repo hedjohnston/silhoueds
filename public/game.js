@@ -45,7 +45,16 @@ const dom = {
 const MODE_KEY = 'silhoueds:mode';
 const CATEGORY_KEY = 'silhoueds:category';
 const CATEGORIES = ['premier-league', 'international'];
-const DEFAULT_CATEGORY = 'international';
+
+/**
+ * The game a first-time visitor opens on.
+ *
+ * Deliberately not the server's DEFAULT_CATEGORY, which is a different question wearing the same
+ * name: that one is what pre-category rows were backfilled as and what the schema columns default
+ * to, so it is fixed at 'international' for good. This is only the landing tab, and it is free to
+ * be whichever game we want to lead with.
+ */
+const DEFAULT_CATEGORY = 'premier-league';
 
 function preferredMode() {
   try {
@@ -397,11 +406,49 @@ function renderResultVideo() {
  */
 let giveUpArmed = false;
 
+/**
+ * Is a skip no longer a skip?
+ *
+ * Skipping means "pass on this guess and take the hint instead". On the last guess there is no
+ * next guess to pass to and no hint left to take: the skip spends the round and shows the answer,
+ * which is giving up under another name. So the key says so, and does the thing it says.
+ *
+ * Keyed on the guess being the last rather than on the hint count, because those only coincide on
+ * a full ladder — a player carrying three hints has them all by their third miss with three
+ * guesses still in hand, and skipping there is still an ordinary skip.
+ */
+const skipWouldEndRound = () => Boolean(state) && !state.finished && state.guessesLeft === 1;
+
 function renderGiveUp() {
-  // Nothing to give up on once the round is over, and the whole dock is hidden anyway.
-  dom.giveUp.hidden = state.finished;
+  const asKey = skipWouldEndRound();
+
+  // The Skip key becomes the way out on the last guess, so the link underneath would be the same
+  // control twice over. Off the last guess it is the only one, and it is never shown once the
+  // round is over.
+  dom.giveUp.hidden = state.finished || asKey;
   dom.giveUp.dataset.armed = String(giveUpArmed);
   dom.giveUp.textContent = giveUpArmed ? 'Tap again to see the answer' : 'Give up';
+
+  // Yellow for a skip, red for the end of the round — a key sits where a thumb already goes, so
+  // the one that ends the round has to look nothing like the one that does not.
+  dom.skip.classList.toggle('key-ending', asKey);
+  dom.skip.dataset.armed = String(asKey && giveUpArmed);
+  // Short because it is a key: the full sentence is what the link says, where there is room.
+  dom.skip.textContent = !asKey ? 'Skip' : giveUpArmed ? 'Tap again' : 'Give up';
+}
+
+/**
+ * One tap arms, the next means it. Shared by the key and the link, so arming either shows on both
+ * and the second tap can land on whichever one is to hand.
+ */
+function confirmGiveUp() {
+  if (!state || state.finished || busy) return;
+  if (!giveUpArmed) {
+    giveUpArmed = true;
+    renderGiveUp();
+    return;
+  }
+  send('/api/giveup');
 }
 
 // How many guesses were on screen last time, so a new one can close whatever dot was being held
@@ -785,6 +832,8 @@ function showNoRound(message) {
   dom.modeNote.textContent = '';
 
   giveUpArmed = false;
+  dom.skip.textContent = 'Skip';
+  dom.skip.classList.remove('key-ending');
   dom.guessesLeft.hidden = true;
   dom.form.hidden = true;
   dom.keyboard.hidden = true;
@@ -837,19 +886,15 @@ async function init() {
     const guess = dom.input.value.trim();
     if (guess) send('/api/guess', { guess });
   });
-  dom.skip.addEventListener('click', () => send('/api/skip'));
-
-  // The first tap arms, the second ends the round. `send` clears the flag on the way out, so the
-  // control is back to "Give up" whichever way the request went.
-  dom.giveUp.addEventListener('click', () => {
-    if (!state || state.finished || busy) return;
-    if (!giveUpArmed) {
-      giveUpArmed = true;
-      renderGiveUp();
-      return;
-    }
-    send('/api/giveup');
+  // On the last guess this key is the way out and asks twice; before that it is an ordinary skip.
+  dom.skip.addEventListener('click', () => {
+    if (skipWouldEndRound()) confirmGiveUp();
+    else send('/api/skip');
   });
+
+  // `send` clears the armed flag on the way out, so both controls are back to "Give up" whichever
+  // way the request went.
+  dom.giveUp.addEventListener('click', confirmGiveUp);
 
   // Every on-screen key lands here; typeChar/backspaceChar are the same two functions a physical
   // keyboard calls below, so it doesn't matter which one a guess was typed on.
