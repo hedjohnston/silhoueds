@@ -691,6 +691,11 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
    sheet width, the way they read as a group in the main flow. */
 #settings-sheet .modes { width: fit-content; margin: 0 auto; }
 
+/* The pills are centred in the sheet and the note under them is too, so the heading is centred
+   with them rather than hanging off to the left of a centred group. Scoped: the stats and archive
+   sheets are ordinary left-aligned documents and their titles stay where they are. */
+#settings-sheet .sheet-title { text-align: center; }
+
 /* A direct child of .card now, like the category pills above it, so the card's own flex gap
    already places it — no margin of its own to add on top. */
 .settings-trigger { align-self: center; }
