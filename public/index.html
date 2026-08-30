@@ -147,12 +147,13 @@
       <!-- The admin's pick for this player — a goal, a moment — built up only once there's one to
            show, so a round with none never asks a browser to reach out to YouTube for nothing. -->
       <div class="result-video" id="result-video" hidden></div>
-      <button class="primary share-button" type="button">Share result</button>
-      <p class="share-status" aria-live="polite"></p>
+      <!-- "result-send", not "share": iOS content blockers hide share-classed buttons outright. -->
+      <button class="primary result-send" type="button">Share result</button>
+      <p class="result-send-status" aria-live="polite"></p>
       <div class="stats" id="stats"></div>
       <p class="comeback" id="comeback"></p>
-      <button class="primary share-button" type="button">Share result</button>
-      <p class="share-status" aria-live="polite"></p>
+      <button class="primary result-send" type="button">Share result</button>
+      <p class="result-send-status" aria-live="polite"></p>
     </section>
 
     <nav class="footer-nav">

@@ -18,8 +18,10 @@ const dom = {
   resultTitle: el('result-title'),
   resultName: el('result-name'),
   resultVideo: el('result-video'),
-  share: Array.from(document.querySelectorAll('.share-button')),
-  shareStatus: Array.from(document.querySelectorAll('.share-status')),
+  // Not named "share": iOS content blockers hide anything classed as a share button on sight,
+  // which took the only way out of a finished round with it.
+  share: Array.from(document.querySelectorAll('.result-send')),
+  shareStatus: Array.from(document.querySelectorAll('.result-send-status')),
   puzzleDate: el('puzzle-date'),
   stats: el('stats'),
   comeback: el('comeback'),
@@ -559,6 +561,21 @@ function shareCaveat() {
   return notes.length > 0 ? `With ${notes.join(' and ')}` : '';
 }
 
+/** The day the first puzzle ran, so a date can be numbered from it. */
+const FIRST_PUZZLE = '2026-08-23';
+
+/**
+ * Which puzzle this is, counting from the first one.
+ *
+ * The share line carries a number rather than the date it's built from: WhatsApp and iMessage run
+ * a date detector over incoming text and turn anything that parses — "2026-08-30" very much
+ * included — into a tappable calendar link, which swallowed the score sitting next to it.
+ */
+function puzzleNumber() {
+  const days = (Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${FIRST_PUZZLE}T00:00:00Z`)) / 86400000;
+  return Math.round(days) + 1;
+}
+
 /** Wordle-style grid: one square per guess, green only on the winning one. */
 function shareGrid() {
   const squares = state.guesses
@@ -571,7 +588,7 @@ function shareGrid() {
   const tag = state.category === 'premier-league' ? ' PL' : '';
   const caveat = shareCaveat();
   const caveatLine = caveat ? `\n${caveat}` : '';
-  return `Silhoueds${tag} ${state.date} ${score}${marker}\n${squares}${caveatLine}`;
+  return `Silhoueds${tag} #${puzzleNumber()} ${score}${marker}\n${squares}${caveatLine}`;
 }
 
 /** Grid plus link, for when we're pasting text rather than handing over a URL separately. */
