@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, editDistance, matchesPlayer, closeness } from '../server/matching.mjs';
+import { normalize, editDistance, matchesPlayer, closeness, nameParts } from '../server/matching.mjs';
 
 test('normalize folds accents, case and punctuation', () => {
   assert.equal(normalize('Zlatan Ibrahimović'), 'zlatanibrahimovic');
@@ -104,4 +104,38 @@ test('closeness on an empty guess is infinitely far, not zero', () => {
   const how = closeness('', { name: 'Pele', aliases: [] });
   assert.equal(how.matched, false);
   assert.equal(how.distance, Infinity);
+});
+
+// --- the halves of a name, filled in as aliases when a player is created ---
+
+test('a two-part name gives both halves', () => {
+  assert.deepEqual(nameParts('David Ginola'), ['David', 'Ginola']);
+});
+
+test('a one-word name gives nothing to add', () => {
+  // The name already matches itself; an alias repeating it would just be noise in the field.
+  assert.deepEqual(nameParts('Ronaldinho'), []);
+  assert.deepEqual(nameParts('  Pele  '), []);
+});
+
+test('a particle stays with the surname it belongs to', () => {
+  assert.deepEqual(nameParts('David de Gea'), ['David', 'de Gea']);
+  assert.deepEqual(nameParts('Ruud van Nistelrooy'), ['Ruud', 'van Nistelrooy']);
+});
+
+test('a long name gives the first word and the last, not the middle', () => {
+  assert.deepEqual(nameParts('Carlos Alberto Torres'), ['Carlos', 'Torres']);
+});
+
+test('a half that is the whole name is not offered twice', () => {
+  assert.deepEqual(nameParts('Ronaldo  Ronaldo'), ['Ronaldo']);
+});
+
+test('the halves are answers the matcher then accepts', () => {
+  // The point of filling these in: neither guess matches the full name on its own, and both
+  // should count once stored.
+  const player = { name: 'David Ginola', aliases: nameParts('David Ginola') };
+  assert.equal(matchesPlayer('Ginola', player).matched, true);
+  assert.equal(matchesPlayer('David', player).matched, true);
+  assert.equal(matchesPlayer('Ginolla', player).matched, true, 'typos are still forgiven');
 });

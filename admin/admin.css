@@ -97,6 +97,8 @@ input:focus-visible, select:focus-visible, button:focus-visible {
    and a card that scrolls sideways hides the very control being reached for. */
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; max-width: 100%; }
 .field label { font-size: 13px; color: var(--muted); }
+/* A field that can be left empty says so in the label, quietly enough not to compete with it. */
+.field label .optional { opacity: 0.7; }
 .field input, .field select { max-width: 100%; }
 
 /* --- player cards --- */

@@ -44,16 +44,34 @@ is web-served; back up both to keep your players.
 
 ## Adding a footballer
 
-In the admin, type the name and upload two images:
+In the admin, type the name and upload the photo:
 
 | Image | What it is |
 | --- | --- |
-| **Silhouette** | The puzzle itself — what players see and guess from |
 | **Full photo** | Revealed in place of the silhouette once the round ends |
+| **Silhouette** | The puzzle itself — what players see and guess from. Optional: made from the photo |
 
-Add the hints and accepted spellings by hand once the player is created. **Publish** is refused
-until a player has artwork and at least one hint their game actually reveals. Use **Replace
-images** to swap either image later.
+The photos this game uses are cut-outs — the player against nothing — so the shape is already in
+the file's own alpha channel, and the silhouette is that shape painted black. Upload a cut-out PNG
+as the photo and the silhouette is made from it on the spot (`server/silhouette.mjs`, PNG in and
+PNG out through `node:zlib`, no image library). The silhouette field then only exists for
+overriding that, and an uploaded one always wins.
+
+Nothing is derived from a photo that can't give a real shape — a JPEG, which has no alpha, or a
+photo with its background still on, which would come out a solid black rectangle. Those leave the
+player with no silhouette, which **Publish** already refuses, rather than a puzzle nobody could
+win. Replacing the photo later leaves an existing silhouette alone, so a traced or uploaded one is
+never quietly thrown away; clear it first to have a new photo make one.
+
+`node tools/make-silhouette.mjs <cut-out.png>` runs the same code from the command line, for
+seeing what an image will give before it goes near the site.
+
+The first and last name are filled into **Also accepted** when the player is created, so either
+half counts as an answer without typing them in. They are ordinary aliases from then on — a first
+name half the league shares is worth deleting, and a particle stays with the surname it belongs to
+(`David de Gea` gives `David` and `de Gea`). Add the hints by hand once the player is created.
+**Publish** is refused until a player has artwork and at least one hint their game actually
+reveals. Use **Replace images** to swap either image later.
 
 Hints are **six numbered slots**, and the order you leave them in is the order they are revealed
 in — slot 1 is what a player earns for their first wrong guess. Six because hard mode releases one
@@ -161,8 +179,8 @@ and casing, then allows a small edit distance that scales with name length — s
 `ibrahimovic` and `Ibrahimovic` all match, and a one-letter slip in a long name is accepted with a
 note that the spelling was off. Short names stay strict, so `Pepe` never matches `Pele`.
 
-Each player also carries an alias list (surname alone, nicknames, common misspellings), which
-you enter and edit by hand.
+Each player also carries an alias list (surname alone, nicknames, common misspellings). Creating
+a player fills in the first and last name; the rest you enter and edit by hand.
 
 ## Look
 
@@ -197,6 +215,7 @@ deploys if it passes, so a broken push stops at CI rather than at the Fly health
 | `server/hints.mjs` | The hint categories each game offers, and what a player actually reveals |
 | `server/auth.mjs` | Signed admin and play-session cookies, and the login throttle |
 | `server/uploads.mjs` | The uploaded-image directory: serving and deleting |
+| `server/silhouette.mjs` | Reads a cut-out PNG and paints it black — the silhouette, from the photo |
 | `server/storage.mjs` | Detects a non-persistent disk and warns loudly |
 | `server/request.mjs` | Reading the caller's timezone off a request |
 | `server/env.mjs` | Loads `.env` at startup |
@@ -205,6 +224,7 @@ deploys if it passes, so a broken push stops at CI rather than at the Fly health
 | `test/` | `npm test` — no dependencies, just `node:test` |
 | `public/` | The game the players see |
 | `admin/` | Admin UI, including the silhouette editor |
+| `tools/` | One-off scripts run by hand: the app icons, the preview image, a silhouette from a file |
 
 ## API
 

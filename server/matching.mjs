@@ -10,6 +10,46 @@ export function normalize(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Particles that belong to the surname rather than standing on their own.
+ *
+ * "de Gea" and "van Nistelrooy" are the names people type; "Gea" and "Nistelrooy" are not, and
+ * offering them as accepted answers would be accepting something nobody would write.
+ */
+const PARTICLES = new Set([
+  'de', 'del', 'della', 'di', 'da', 'das', 'dos', 'du', 'van', 'von', 'der', 'den', 'ter',
+  'la', 'le', 'el', 'al', 'bin', 'ben', 'mc', 'mac', "o'", 'st',
+]);
+
+/**
+ * The first and last name inside a full name, as answers to accept on their own.
+ *
+ * Filled into a new player's aliases so a guess of either half counts without anyone typing them
+ * in. They are ordinary aliases once stored — editable and deletable in the admin, because the
+ * right answer isn't always both: a first name shared by half the league is worth removing, and a
+ * player known by one name only ("Ronaldinho") gets nothing here to remove in the first place.
+ */
+export function nameParts(name) {
+  const words = String(name).trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return [];
+
+  // Walk back over any particles so the surname keeps them.
+  let start = words.length - 1;
+  while (start > 1 && PARTICLES.has(words[start - 1].toLowerCase().replace(/[^a-z']/g, ''))) {
+    start--;
+  }
+
+  const parts = [words[0], words.slice(start).join(' ')];
+  const full = normalize(name);
+  const seen = new Set();
+  return parts.filter((part) => {
+    const key = normalize(part);
+    if (!key || key === full || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Levenshtein distance, capped — we only care about small edit distances. */
 export function editDistance(a, b) {
   if (a === b) return 0;

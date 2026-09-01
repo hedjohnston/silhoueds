@@ -3,6 +3,7 @@
 import express from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { players, schedule, plays, users, CATEGORIES } from './db.mjs';
 import {
@@ -13,8 +14,9 @@ import { HINT_LABELS, MAX_HINTS, hintLabelsFor, playableHints } from './hints.mj
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
 import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
-import { closeness } from './matching.mjs';
+import { closeness, nameParts } from './matching.mjs';
 import { UPLOAD_DIR, sendUpload, discard } from './uploads.mjs';
+import { silhouetteFrom } from './silhouette.mjs';
 
 /** Which of the two daily games this request concerns. */
 function categoryOf(req) {
@@ -92,6 +94,28 @@ function discardUploads(req) {
   for (const file of Object.values(req.files ?? {}).flat()) {
     fs.rmSync(file.path, { force: true });
   }
+}
+
+/**
+ * Make the silhouette out of the uploaded photo, and return the name it was stored under.
+ *
+ * The photos this game uses are cut-outs, so the shape is already in the file's own alpha — see
+ * server/silhouette.mjs. Null means this upload couldn't give one (a JPEG, or a photo with its
+ * background still on), and the caller leaves the player without a silhouette for **Trace by
+ * hand** to fill in, rather than storing a black rectangle nobody could guess.
+ */
+function silhouetteFromPhoto(filename) {
+  if (!filename || !filename.endsWith('.png')) return null;
+  let png;
+  try {
+    png = silhouetteFrom(fs.readFileSync(path.join(UPLOAD_DIR, filename)));
+  } catch {
+    return null; // an unreadable upload is not worth failing the whole save over
+  }
+  if (!png) return null;
+  const derived = `${crypto.randomUUID()}.png`;
+  fs.writeFileSync(path.join(UPLOAD_DIR, derived), png);
+  return derived;
 }
 
 const slugify = (name) =>
@@ -253,12 +277,14 @@ adminRouter.post('/players', uploads, async (req, res) => {
     return res.status(400).json({ error: 'A name is required.' });
   }
 
-  const silhouetteFile = req.files?.silhouette?.[0]?.filename ?? null;
   const photoFile = req.files?.photo?.[0]?.filename ?? null;
+  // A silhouette uploaded by hand wins; otherwise the cut-out photo makes its own.
+  const silhouetteFile = req.files?.silhouette?.[0]?.filename ?? silhouetteFromPhoto(photoFile);
 
   const player = players.create({
     slug: uniqueSlug(name),
     name,
+    aliases: nameParts(name),
     photo: photoFile,
     silhouetteImage: silhouetteFile,
     revealImage: photoFile,
@@ -290,6 +316,12 @@ adminRouter.post('/players/:id/images', uploads, (req, res) => {
     discard(player.photo);
     fields.photo = photoFile;
     fields.reveal_image = photoFile;
+    // Only for a player who has no silhouette at all: replacing the photo shouldn't quietly throw
+    // away one that was uploaded or traced by hand. To redo it from a new photo, clear it first.
+    if (!silhouetteFile && !player.silhouette_image && !player.silhouette) {
+      const derived = silhouetteFromPhoto(photoFile);
+      if (derived) fields.silhouette_image = derived;
+    }
   }
   if (Object.keys(fields).length === 0) {
     discardUploads(req);

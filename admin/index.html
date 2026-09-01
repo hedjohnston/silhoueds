@@ -44,7 +44,7 @@
           <select id="new-category"></select>
         </div>
         <div class="field">
-          <label for="new-silhouette">Silhouette image</label>
+          <label for="new-silhouette">Silhouette image <span class="optional">(optional)</span></label>
           <input id="new-silhouette" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/svg+xml">
         </div>
         <div class="field">
@@ -54,9 +54,12 @@
         <button class="primary" type="submit">Add</button>
       </form>
       <p class="hint-text">
-        Upload the silhouette and the full photo. The silhouette is the puzzle; the full photo is
-        revealed once the round is over. Add the hints by hand once the player is created.
-        Nothing goes live until you publish it.
+        The full photo is revealed once the round is over. If it is a cut-out PNG — the player
+        with the background already removed — the silhouette is made from it automatically, so
+        the silhouette field is only for overriding that or for a photo that isn't a cut-out.
+        The first and last name are accepted as answers from the off; edit them under
+        <b>Also accepted</b>. Add the hints by hand once the player is created. Nothing goes live
+        until you publish it.
       </p>
       <p class="error" id="add-error" role="alert"></p>
     </section>
