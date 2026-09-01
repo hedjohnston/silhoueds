@@ -152,18 +152,45 @@
       <p class="result-send-status" aria-live="polite"></p>
       <div class="stats" id="stats"></div>
       <p class="comeback" id="comeback"></p>
-      <button class="primary result-send" type="button">Share result</button>
-      <p class="result-send-status" aria-live="polite"></p>
     </section>
 
     <nav class="footer-nav">
       <button class="link" id="stats-button" type="button">Your stats</button>
       <button class="link" id="archive-button" type="button">Past puzzles</button>
-      <!-- Optional, and only ever a link away: signing in just makes the stats above follow you
-           to another device instead of starting over there. Nothing else about the game changes. -->
-      <span class="link" id="auth-status" hidden></span>
-      <button class="link" id="auth-signout" type="button" hidden>Sign out</button>
-      <a class="link" id="auth-signin" href="/api/auth/google/start" hidden>Sign in with Google</a>
+    </nav>
+
+    <!-- Its own row rather than two more footer links: four across never fit a phone without
+         wrapping somewhere unfortunate, and the name is a statement while only the sign-out is
+         an action, so they are not set alike. -->
+    <div class="auth-signed" id="auth-signed" hidden>
+      <span class="auth-who" id="auth-status"></span>
+      <button class="link auth-signout" id="auth-signout" type="button">Sign out</button>
+    </div>
+
+    <!-- The other footer links go somewhere in the game; this one hands the browser to Google,
+         so it is a button on its own line and the first click only opens the note saying what
+         signing in is for — a phone has no hover to read it any other way. The wrapper carries
+         that armed state, and is what the note is positioned against. -->
+    <div class="auth-cta" id="auth-cta" hidden>
+      <a class="auth-button" id="auth-signin" href="/api/auth/google/start" aria-describedby="auth-note">
+        <!-- Google's mark, inline: their branding is required on the button, and a remote image
+             would be one more request between a tap and the redirect. -->
+        <svg class="auth-g" viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" focusable="false">
+        <path fill="#4285F4" d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z"/>
+        <path fill="#34A853" d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.344 0-4.3282-1.5831-5.036-3.7104H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z"/>
+        <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1022-1.17.2822-1.71V4.9582H.9573A8.9965 8.9965 0 0 0 0 9c0 1.4523.3477 2.8268.9573 4.0418L3.964 10.71z"/>
+        <path fill="#EA4335" d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1627 6.656 3.5795 9 3.5795z"/>
+      </svg>
+        Sign in with Google
+      </a>
+      <span class="auth-note" id="auth-note" role="tooltip">Optional — it just keeps your stats
+        when you switch devices.
+        <span class="auth-note-go">Tap again to continue.</span></span>
+    </div>
+
+    <nav class="footer-nav footer-legal">
+      <a class="link" href="/privacy.html">Privacy</a>
+      <a class="link" href="/terms.html">Terms</a>
     </nav>
 
     <dialog class="sheet" id="sheet">

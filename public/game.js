@@ -28,6 +28,8 @@ const dom = {
   statsButton: el('stats-button'),
   archiveButton: el('archive-button'),
   authStatus: el('auth-status'),
+  authSigned: el('auth-signed'),
+  authCta: el('auth-cta'),
   authSignin: el('auth-signin'),
   authSignout: el('auth-signout'),
   sheet: el('sheet'),
@@ -690,10 +692,28 @@ async function initAuth() {
   } catch {
     return; // The sign-in link just doesn't appear — the game itself never depends on this.
   }
-  dom.authSignin.hidden = session.signedIn || !session.googleEnabled;
-  dom.authStatus.hidden = !session.signedIn;
-  dom.authSignout.hidden = !session.signedIn;
+  // The sign-in link and its tooltip travel together, so the wrapper is what gets hidden.
+  dom.authCta.hidden = session.signedIn || !session.googleEnabled;
+  dom.authSigned.hidden = !session.signedIn;
   if (session.signedIn) dom.authStatus.textContent = `Signed in as ${session.name || 'you'}`;
+}
+
+/**
+ * The first click on the sign-in link shows what signing in is for instead of leaving the page;
+ * the second one goes. Hover says the same thing, so a mouse usually reads it before clicking at
+ * all — but a phone has no hover, and this is the only moment left to explain before the browser
+ * is handed to Google.
+ */
+function armSignin(event) {
+  if (dom.authCta.dataset.armed === 'true') return; // Armed already: let the link do its job.
+  event.preventDefault();
+  dom.authCta.dataset.armed = 'true';
+}
+
+/** Anything that isn't a second tap on the link puts it back to its resting state. */
+function disarmSignin(event) {
+  if (event?.type === 'click' && dom.authCta.contains(event.target)) return;
+  dom.authCta.dataset.armed = 'false';
 }
 
 /** Reads a `?auth=` query param left by the Google sign-in redirect, then removes it. */
@@ -912,6 +932,14 @@ async function init() {
   // `send` clears the armed flag on the way out, so both controls are back to "Give up" whichever
   // way the request went.
   dom.giveUp.addEventListener('click', confirmGiveUp);
+
+  // Signing in asks twice as well, though for the opposite reason: not because it can't be undone,
+  // but because nobody should be sent to Google without being told what it buys them.
+  dom.authSignin.addEventListener('click', armSignin);
+  document.addEventListener('click', disarmSignin);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') disarmSignin();
+  });
 
   // Every on-screen key lands here; typeChar/backspaceChar are the same two functions a physical
   // keyboard calls below, so it doesn't matter which one a guess was typed on.

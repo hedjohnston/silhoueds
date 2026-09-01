@@ -511,13 +511,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .key-ending { background: var(--red); }
 .key-ending[data-armed='true'] { background: var(--ink); color: var(--ground); }
 
-/* Sits under the keyboard, centred and muted — it is an exit, not an action the round is about. */
-.give-up { align-self: center; }
+/* Sits under the keyboard, centred and muted — it is an exit, not an action the round is about.
+   Set in small caps rather than the footer's underlined link style: the two sit inches apart, and
+   leaving the round should not look like the same kind of thing as going to your stats. */
+.link.give-up {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.link.give-up:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Armed: one tap in, waiting for the second. A pastel block with black ink is the idiom the rest
    of the page uses for "this is a thing", and it makes the state impossible to miss on the one
    control whose next tap cannot be taken back. */
 .give-up[data-armed='true'] {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
   padding: 4px 10px;
   border-radius: 8px;
   background: var(--red);
@@ -652,7 +666,7 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 
 /* --- footer nav and sheet --- */
 
-.footer-nav { display: flex; justify-content: center; gap: 20px; }
+.footer-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
 
 .link {
   padding: 4px 2px;
@@ -723,3 +737,115 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 .archive-solved { background: var(--green); }
 .archive-failed { background: var(--red); }
 .archive-started { background: var(--yellow); }
+
+/* --- privacy and terms --- */
+.prose {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+}
+
+.prose h1 { margin: 0; font-family: var(--display); font-size: 34px; }
+.prose h2 { margin: 28px 0 6px; font-family: var(--display); font-size: 20px; }
+.prose p { margin: 0 0 12px; }
+.prose a { color: var(--ink); text-underline-offset: 3px; }
+.prose-date { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+.prose-back { margin-top: 32px; font-weight: 800; }
+
+.footer-legal { margin-top: 8px; }
+.footer-legal .link { font-size: 13px; font-weight: 700; }
+
+/* --- signed in --- */
+
+/* The name is a statement and the sign-out is an action, so they are set differently and only
+   the second one is underlined. Centred on its own line under the footer links. */
+.auth-signed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 10px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.auth-who { color: var(--muted); font-size: 13px; }
+.link.auth-signout { padding: 0; font-size: 13px; font-weight: 700; }
+
+/* --- sign in with Google --- */
+
+.auth-cta { position: relative; display: flex; justify-content: center; margin-top: 14px; }
+
+/* The page's own idiom — black outline, hard shadow — rather than Google's button chrome, so it
+   sits with the keyboard and the pills instead of looking pasted in from another site. */
+.auth-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-press);
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-button:hover { background: var(--grey-light); }
+.auth-button:active { box-shadow: none; transform: translate(1px, 1px); }
+.auth-g { flex: none; }
+
+/* Tooltip: hidden until the button is hovered or focused, so the footer stays quiet. Positioned
+   above the button because below it is the bottom of the page on a phone. */
+.auth-note {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: max-content;
+  max-width: min(30ch, calc(100vw - 32px));
+  padding: 7px 11px;
+  background: var(--ink);
+  color: var(--ground);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+/* A little tail, so it reads as attached to the button rather than floating over the footer. */
+.auth-note::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+}
+
+.auth-button:hover + .auth-note,
+.auth-button:focus-visible + .auth-note,
+.auth-cta[data-armed='true'] .auth-note {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Only once the first tap has landed: on hover the note is background reading, but after a tap it
+   has to say what the tap did and what the next one will do. */
+.auth-note-go { display: none; margin-top: 4px; font-weight: 800; }
+.auth-cta[data-armed='true'] .auth-note-go { display: block; }
+
+/* Armed, so the button matches the note above it rather than looking untouched. */
+.auth-cta[data-armed='true'] .auth-button { background: var(--grey-light); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-note { transition: none; }
+}
