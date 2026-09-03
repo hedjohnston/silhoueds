@@ -52,7 +52,9 @@ In the admin, type the name and upload the photo:
 | **Silhouette** | The puzzle itself — what players see and guess from. Optional: made from the photo |
 
 The photos this game uses are cut-outs — the player against nothing — so the shape is already in
-the file's own alpha channel, and the silhouette is that shape painted black. Upload a cut-out PNG
+the file's own alpha channel, and the silhouette is that shape painted black. For a photograph
+that still has its background, `node tools/make-cutout.mjs <photo…>` does the cutting out first;
+see below. Upload a cut-out PNG
 as the photo and the silhouette is made from it on the spot (`server/silhouette.mjs`, PNG in and
 PNG out through `node:zlib`, no image library). The silhouette field then only exists for
 overriding that, and an uploaded one always wins.
@@ -65,6 +67,26 @@ never quietly thrown away; clear it first to have a new photo make one.
 
 `node tools/make-silhouette.mjs <cut-out.png>` runs the same code from the command line, for
 seeing what an image will give before it goes near the site.
+
+### Cutting the player out
+
+A photograph with its background still on has no shape to take, so something has to cut the player
+out of it first. `node tools/make-cutout.mjs <photo…>` does, using the Mac's own Vision framework
+— the same thing behind **Remove Background** in Preview. It takes a list of files, writes
+`<name>-cutout.png` beside each, and crops to the player; the Swift behind it (`tools/cutout.swift`)
+is compiled on first use and cached in `tools/.build`, so only the first run is slow.
+
+Vision finds every subject in the frame and this keeps the largest, which in a match photograph is
+usually the player the picture is of. Usually — a defender close to the camera can be bigger than
+the player you want, and two players overlapping can come back as one subject. Look at what comes
+out. `--all` keeps every subject, `--whole` keeps the original framing instead of cropping.
+
+**This is a tool you run, not something the site does**, and it is the one part of this that only
+works on a Mac. Vision is macOS-only, the container is Linux, and doing it server-side would mean
+a segmentation model and its runtime riding along in the image — the same few hundred MB this
+project turned down for the easy-mode blur. Cut out on your machine, upload the result, and the
+site makes the silhouette. Cut them out some other way if you prefer; nothing downstream cares how
+the background went, only that it is gone.
 
 The first and last name are filled into **Also accepted** when the player is created, so either
 half counts as an answer without typing them in. They are ordinary aliases from then on — a first
@@ -224,7 +246,7 @@ deploys if it passes, so a broken push stops at CI rather than at the Fly health
 | `test/` | `npm test` — no dependencies, just `node:test` |
 | `public/` | The game the players see |
 | `admin/` | Admin UI, including the silhouette editor |
-| `tools/` | One-off scripts run by hand: the app icons, the preview image, a silhouette from a file |
+| `tools/` | Scripts run by hand: the app icons, the preview image, cutting a player out, a silhouette from a file |
 
 ## API
 

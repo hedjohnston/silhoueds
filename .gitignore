@@ -12,3 +12,6 @@ captured-request.json
 
 # Icon source artwork is kept so the icons can be regenerated.
 !assets/icon-source.jpg
+
+# Compiled by tools/make-cutout.mjs on first use, rebuilt whenever the Swift changes.
+tools/.build/
