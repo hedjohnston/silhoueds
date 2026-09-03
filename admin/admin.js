@@ -10,6 +10,7 @@ const dom = Object.fromEntries(
     'schedule-player-id', 'schedule-player-results', 'schedule', 'schedule-error',
     'tracer', 'tracer-title', 'tracer-stage', 'tracer-photo', 'tracer-svg', 'tracer-preview',
     'tracer-smooth', 'tracer-dim', 'tracer-undo', 'tracer-clear', 'tracer-save', 'tracer-error',
+    'preview', 'preview-title', 'preview-body',
     'storage-alarm', 'insights', 'insight-category', 'insight-date',
     'archive-played', 'accounts',
   ].map((id) => [id, el(id)]),
@@ -415,6 +416,11 @@ function renderPlayers() {
     replace.textContent = 'Replace images';
     replace.onclick = () => openImagePicker(player);
 
+    const preview = document.createElement('button');
+    preview.className = 'ghost';
+    preview.textContent = 'Preview';
+    preview.onclick = () => openPreview(player);
+
     const trace = document.createElement('button');
     trace.className = 'ghost';
     trace.textContent = player.silhouette_image || player.silhouette ? 'Touch up by hand' : 'Trace by hand';
@@ -481,7 +487,7 @@ function renderPlayers() {
       await refresh();
     };
 
-    actions.append(replace, trace, save, publish, archive, remove);
+    actions.append(preview, replace, trace, save, publish, archive, remove);
     details.append(hintEditor.list, hintEditor.caption, aliasLabel, videoLabel, categoryLabelField, actions);
     const opening = buildEasyOpening(player);
     body.append(art, ...(opening ? [opening] : []), details);
@@ -813,6 +819,148 @@ async function refreshInsightDates() {
   dom['insight-date'].value = dates.some((d) => d.date === chosen) ? chosen : dates[0].date;
   await renderInsights(dom['insight-date'].value);
 }
+
+// --- preview -------------------------------------------------------------
+
+/** One labelled art box: the silhouette, easy mode's opening frame, or the reveal photo. */
+function previewArt(caption, build) {
+  const figure = document.createElement('figure');
+  figure.className = 'preview-art';
+  const stage = document.createElement('div');
+  stage.className = 'preview-stage';
+  build(stage);
+  const label = document.createElement('figcaption');
+  label.textContent = caption;
+  figure.append(stage, label);
+  return figure;
+}
+
+/**
+ * The saved round, as a player meets it: what they open on, what each wrong guess buys them, and
+ * what the end of the round shows.
+ *
+ * Everything here comes from the server's own round state rather than from the card's fields, so
+ * what is previewed is what the game would actually serve — a hint category this game drops is
+ * missing here too, which is the discrepancy worth catching before the day it runs.
+ */
+async function openPreview(player) {
+  dom['preview-title'].textContent = `${player.name} — as played`;
+  dom['preview-body'].innerHTML = '<p class="hint-text">Loading…</p>';
+  dom.preview.showModal();
+
+  let state;
+  try {
+    state = await api(`/api/admin/players/${player.id}/preview`);
+  } catch (error) {
+    dom['preview-body'].innerHTML = '';
+    const failed = document.createElement('p');
+    failed.className = 'error';
+    failed.textContent = error.message;
+    dom['preview-body'].append(failed);
+    return;
+  }
+
+  const body = dom['preview-body'];
+  body.innerHTML = '';
+
+  // A draft never reaches a player at all, so say so before anything below is taken as final.
+  if (state.status !== 'ready') {
+    const draft = document.createElement('p');
+    draft.className = 'preview-warning';
+    draft.textContent = state.missing.length
+      ? `Not published — still missing ${state.missing.join(' and ')}.`
+      : 'Not published — this is how it would play once it is.';
+    body.append(draft);
+  }
+
+  const art = document.createElement('div');
+  art.className = 'preview-arts';
+
+  art.append(previewArt('Opens here (hard)', (stage) => {
+    if (state.silhouetteUrl) {
+      const image = document.createElement('img');
+      image.src = state.silhouetteUrl;
+      image.alt = '';
+      stage.append(image);
+    } else if (state.silhouette) {
+      stage.innerHTML = state.silhouette;
+    } else {
+      stage.innerHTML = '<span class="art-empty">no silhouette</span>';
+    }
+  }));
+
+  if (state.photoUrl) {
+    art.append(previewArt('Opens here (easy)', (stage) => {
+      const image = document.createElement('img');
+      image.src = state.photoUrl;
+      image.alt = '';
+      // The filter game.js applies at step 0 — the same frame, not an approximation of it.
+      image.style.filter = 'brightness(0)';
+      stage.append(image);
+    }));
+  }
+
+  if (state.revealUrl) {
+    art.append(previewArt('Reveal', (stage) => {
+      const image = document.createElement('img');
+      image.src = state.revealUrl;
+      image.alt = '';
+      stage.append(image);
+    }));
+  }
+
+  body.append(art);
+
+  const hints = document.createElement('ol');
+  hints.className = 'preview-hints';
+  if (state.hints.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'preview-empty';
+    empty.textContent = 'No hints — a wrong guess would buy nothing.';
+    hints.append(empty);
+  }
+  for (const hint of state.hints) {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    label.className = 'preview-hint-label';
+    label.textContent = hint.label;
+    const value = document.createElement('span');
+    value.textContent = hint.value;
+    row.append(label, value);
+    hints.append(row);
+  }
+
+  const hintsHead = document.createElement('h3');
+  hintsHead.textContent =
+    `${state.hints.length} of ${hintCatalog.max ?? state.hints.length} hints, revealed one per wrong guess`;
+  body.append(hintsHead, hints);
+
+  const answers = document.createElement('p');
+  answers.className = 'preview-answers';
+  answers.innerHTML = '<b>Answer</b> ';
+  answers.append(state.answer);
+  if (state.aliases.length) {
+    const also = document.createElement('span');
+    also.className = 'preview-aliases';
+    also.textContent = ` — also accepted: ${state.aliases.join(', ')}`;
+    answers.append(also);
+  }
+  body.append(answers);
+
+  if (state.videoId) {
+    const video = document.createElement('iframe');
+    video.className = 'preview-video';
+    video.src = `https://www.youtube-nocookie.com/embed/${state.videoId}`;
+    video.title = 'Video shown with the reveal';
+    video.allow = 'accelerometer; encrypted-media; picture-in-picture';
+    video.referrerPolicy = 'strict-origin-when-cross-origin';
+    video.allowFullscreen = true;
+    body.append(video);
+  }
+}
+
+// Closing leaves nothing behind — an embedded video would otherwise carry on playing unseen.
+dom.preview.addEventListener('close', () => { dom['preview-body'].innerHTML = ''; });
 
 // --- tracer --------------------------------------------------------------
 

@@ -13,7 +13,7 @@ import {
 import { HINT_LABELS, MAX_HINTS, hintLabelsFor, playableHints } from './hints.mjs';
 import { storageStatus } from './storage.mjs';
 import { zoneOf } from './request.mjs';
-import { todayKey, hasArtwork, normalizeCategory } from './game.mjs';
+import { todayKey, hasArtwork, normalizeCategory, publicState } from './game.mjs';
 import { closeness, nameParts } from './matching.mjs';
 import { UPLOAD_DIR, sendUpload, discard } from './uploads.mjs';
 import { silhouetteFrom } from './silhouette.mjs';
@@ -409,6 +409,43 @@ adminRouter.get('/players/:id/photo', (req, res) => {
 
 adminRouter.get('/players/:id/silhouette-image', (req, res) => {
   sendUpload(res, players.get(Number(req.params.id))?.silhouette_image);
+});
+
+adminRouter.get('/players/:id/reveal-image', (req, res) => {
+  sendUpload(res, players.get(Number(req.params.id))?.reveal_image);
+});
+
+/**
+ * The saved round, as the game itself would serve it.
+ *
+ * Built by `publicState` rather than by reading the row, because what the admin types and what a
+ * player is shown are not the same thing: a hint category this game has no use for is dropped, a
+ * repeated one counts once, and the ladder stops at MAX_HINTS. Those rules live in the game, so
+ * the preview asks the game rather than restating them and drifting.
+ *
+ * The round is asked for as a finished one, which is the state that holds everything: every hint
+ * released, the answer, and the video. What is stored is previewed — edits still sitting unsaved
+ * in a card are not, which is the point of looking.
+ */
+adminRouter.get('/players/:id/preview', (req, res) => {
+  const player = players.get(Number(req.params.id));
+  if (!player) return res.status(404).json({ error: 'No such player' });
+
+  const state = publicState(player, { guesses: [], finished: true, won: false, mode: 'hard' });
+  const image = (file, path) => (file ? `/api/admin/players/${player.id}/${path}` : null);
+
+  res.json({
+    ...state,
+    // publicState addresses whoever is playing today; this is one named player, live or draft.
+    silhouetteUrl: image(player.silhouette_image, 'silhouette-image'),
+    revealUrl: image(player.reveal_image, 'reveal-image'),
+    // Easy mode's opening frame comes from the same photo, flattened by the client.
+    photoUrl: image(player.reveal_image, 'reveal-image'),
+    name: player.name,
+    aliases: player.aliases,
+    status: player.status,
+    missing: readiness(player),
+  });
 });
 
 adminRouter.get('/schedule', (req, res) => {
