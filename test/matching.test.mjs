@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, editDistance, matchesPlayer, closeness, nameParts } from '../server/matching.mjs';
+import { normalize, editDistance, matchesPlayer, closeness, nameParts, soundKey } from '../server/matching.mjs';
 
 test('normalize folds accents, case and punctuation', () => {
   assert.equal(normalize('Zlatan Ibrahimović'), 'zlatanibrahimovic');
@@ -138,4 +138,52 @@ test('the halves are answers the matcher then accepts', () => {
   assert.equal(matchesPlayer('Ginola', player).matched, true);
   assert.equal(matchesPlayer('David', player).matched, true);
   assert.equal(matchesPlayer('Ginolla', player).matched, true, 'typos are still forgiven');
+});
+
+test('soundKey keeps the sound and throws the spelling away', () => {
+  // A run of vowels is one sound, which is the whole reason RAOUL is Raul.
+  assert.equal(soundKey('Raoul'), soundKey('Raul'));
+  // Doubled letters are nobody's idea of a second sound.
+  assert.equal(soundKey('Zidanne'), soundKey('Zidane'));
+  assert.equal(soundKey('Mohammed'), soundKey('Mohamed'));
+  // The letters people swap for one another.
+  assert.equal(soundKey('Sucker'), soundKey('Suker'));   // ck / k
+  assert.equal(soundKey('Filipe'), soundKey('Philipe')); // ph / f
+  assert.equal(soundKey('Tiago'), soundKey('Thiago'));   // th / t
+  assert.equal(soundKey(''), '');
+});
+
+test('a short name that is spelled by ear still counts', () => {
+  // The case from the admin's near-miss list: RAOUL is five letters, so edit distance gives it
+  // no slack at all, and yet it is plainly the same name.
+  const raul = { name: 'Raul', aliases: [] };
+  assert.deepEqual(matchesPlayer('RAOUL', raul), { matched: true, exact: false });
+  assert.deepEqual(matchesPlayer('Raul', raul), { matched: true, exact: true });
+});
+
+test('sounding alike does not make two different players the same one', () => {
+  // The whole risk of matching by sound. These pairs are near-neighbours in spelling, and each
+  // is a real player who must not win the other's round.
+  assert.equal(matchesPlayer('Pepe', { name: 'Pele', aliases: [] }).matched, false);
+  assert.equal(matchesPlayer('Kanu', { name: 'Kane', aliases: [] }).matched, false);
+  assert.equal(matchesPlayer('Vieri', { name: 'Vieira', aliases: [] }).matched, false);
+  assert.equal(matchesPlayer('Cole', { name: 'Kolo', aliases: [] }).matched, false);
+  assert.equal(matchesPlayer('Sala', { name: 'Salah', aliases: [] }).matched, false);
+  assert.equal(matchesPlayer('Kaka', { name: 'Kaku', aliases: [] }).matched, false);
+});
+
+test('a guess heard through by sound is a win, not a near miss', () => {
+  // closeness() feeds the admin's "probably should have counted" list. Anything the matcher now
+  // accepts has to report matched, or the admin is offered an alias it already does not need.
+  const raul = { name: 'Raul', aliases: [] };
+  assert.equal(closeness('RAOUL', raul).matched, true);
+  assert.equal(matchesPlayer('RAOUL', raul).matched, true);
+  // ...and the distance it reports is still the distance between the spellings.
+  assert.equal(closeness('RAOUL', raul).distance, 1);
+});
+
+test('an alias is matched by sound too, not just the full name', () => {
+  const player = { name: 'Zinedine Zidane', aliases: ['Zidane'] };
+  assert.equal(matchesPlayer('Zidanne', player).matched, true);
+  assert.equal(matchesPlayer('Zinedine Zidanne', player).matched, true);
 });

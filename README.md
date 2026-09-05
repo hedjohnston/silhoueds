@@ -201,6 +201,15 @@ and casing, then allows a small edit distance that scales with name length — s
 `ibrahimovic` and `Ibrahimovic` all match, and a one-letter slip in a long name is accepted with a
 note that the spelling was off. Short names stay strict, so `Pepe` never matches `Pele`.
 
+A guess that fails on spelling gets one more hearing, by sound. `soundKey()` folds the letters
+people swap for each other (`ph`/`f`, `ck`/`k`, `z`/`s`, `w`/`v`, `y`/`i`, hard and soft `c`),
+then runs of vowels down to their first and doubled letters down to one — so `RAOUL` is `Raul`
+and `Zidanne` is `Zidane`, both accepted with the same spelling note. This is what covers the
+short names, which the edit distance cannot help by design. It is not a phonetic algorithm: each
+rule collapses a misspelling people actually type, and the same length-scaled tolerance applies
+to the sound keys, which are shorter than the names — so `Pepe`/`Pele`, `Kanu`/`Kane` and
+`Vieri`/`Vieira` still stay apart.
+
 Each player also carries an alias list (surname alone, nicknames, common misspellings). Creating
 a player fills in the first and last name; the rest you enter and edit by hand.
 
