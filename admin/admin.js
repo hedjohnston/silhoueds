@@ -5,6 +5,7 @@ const dom = Object.fromEntries(
   [
     'login', 'login-form', 'login-error', 'password', 'app', 'logout',
     'add-form', 'new-name', 'new-category', 'new-photo', 'new-silhouette', 'add-error',
+    'new-photo-preview', 'new-silhouette-preview',
     'player-filter', 'player-category-filter', 'players', 'counts',
     'schedule-form', 'schedule-category', 'schedule-date', 'schedule-player-search',
     'schedule-player-id', 'schedule-player-results', 'schedule', 'schedule-error',
@@ -91,6 +92,116 @@ function statusChip(player) {
   return `<span class="chip chip-draft">Draft${missing ? ` — needs ${missing}` : ''}</span>`;
 }
 
+/**
+ * The admin's call on how hard a footballer will be, 1 to 5.
+ *
+ * A word per rung rather than bare numbers: "4" means nothing on its own, and the whole value of
+ * the rating is that two people — or the same person three months apart — read it the same way.
+ * Never sent to the player; it exists to balance the schedule, and to be checked against what
+ * people actually managed in the insights panel below.
+ */
+const DIFFICULTY_LABELS = ['Obvious', 'Easy', 'Fair', 'Tough', 'Brutal'];
+
+const difficultyLabel = (rating) =>
+  Number.isInteger(rating) && rating >= 1 && rating <= 5
+    ? `${rating} · ${DIFFICULTY_LABELS[rating - 1]}`
+    : 'Unrated';
+
+/**
+ * The rating as five dots, filled to the rating — readable at a glance down a list of forty
+ * footballers in a way "4" in a box is not. Text for anything that isn't looking at the dots.
+ */
+function difficultyDots(rating) {
+  const dots = document.createElement('span');
+  dots.className = 'difficulty-dots';
+  for (let rung = 1; rung <= 5; rung++) {
+    const dot = document.createElement('span');
+    dot.className = rung <= rating ? 'difficulty-dot difficulty-dot-on' : 'difficulty-dot';
+    dots.append(dot);
+  }
+  dots.setAttribute('aria-hidden', 'true');
+  return dots;
+}
+
+/**
+ * The rating control on a player card: five buttons, plus the way back out of having rated.
+ *
+ * Returns `read()` rather than saving on click, so a rating lands with the rest of the card's
+ * edits under one Save — the same bargain every other field on the card makes.
+ */
+function buildDifficultyEditor(player) {
+  let chosen = Number.isInteger(player.difficulty) ? player.difficulty : null;
+
+  const field = document.createElement('div');
+  field.className = 'difficulty-field';
+
+  const legend = document.createElement('span');
+  legend.className = 'alias-label difficulty-legend';
+  legend.id = `difficulty-legend-${player.id}`;
+  legend.textContent = 'How hard will this be?';
+
+  const scale = document.createElement('div');
+  scale.className = 'difficulty-scale';
+  scale.setAttribute('role', 'radiogroup');
+  scale.setAttribute('aria-labelledby', legend.id);
+
+  const caption = document.createElement('p');
+  caption.className = 'difficulty-caption';
+
+  const rungs = [];
+  const paint = () => {
+    for (const [rating, button] of rungs) {
+      const on = chosen !== null && rating <= chosen;
+      button.classList.toggle('difficulty-rung-on', on);
+      button.setAttribute('aria-checked', String(chosen === rating));
+      // Only the chosen rung is in the tab order, so a radiogroup is one stop rather than five.
+      button.tabIndex = chosen === rating || (chosen === null && rating === 1) ? 0 : -1;
+    }
+    caption.textContent = chosen === null
+      ? 'Not rated yet — your own estimate, never shown to players.'
+      : `${difficultyLabel(chosen)} — never shown to players.`;
+    clear.hidden = chosen === null;
+  };
+
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'difficulty-clear';
+  clear.textContent = 'Clear';
+  clear.onclick = () => { chosen = null; paint(); };
+
+  for (let rating = 1; rating <= 5; rating++) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'difficulty-rung';
+    button.setAttribute('role', 'radio');
+    // The number is decoration next to the word; the word is what a screen reader should read.
+    button.setAttribute('aria-label', difficultyLabel(rating));
+    button.textContent = String(rating);
+    // Tapping the rating you already hold takes it back off, so the control undoes itself
+    // without a second one to hunt for.
+    button.onclick = () => { chosen = chosen === rating ? null : rating; paint(); };
+    rungs.push([rating, button]);
+    scale.append(button);
+  }
+
+  // Arrow keys move through a radiogroup; without this the five buttons are five tab stops that
+  // ignore the keys anyone expects to work on them.
+  scale.onkeydown = (event) => {
+    const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    chosen = Math.min(5, Math.max(1, (chosen ?? 0) + step));
+    paint();
+    rungs[chosen - 1][1].focus();
+  };
+
+  scale.append(clear);
+  field.append(legend, scale, caption);
+  paint();
+
+  return { field, read: () => chosen };
+}
+
 /** The silhouette thumbnail, shared between the collapsed summary and the expanded card. */
 function buildArt(player, { small = false } = {}) {
   const art = document.createElement('div');
@@ -150,18 +261,24 @@ const WRITE_MY_OWN = '\u0000write-my-own';
 function hintSlot({ label, value }, { offered, taken, onChange }) {
   const node = document.createElement('li');
 
+  // The row is a grid of three controls with no room for visible labels, so each carries its own
+  // name. A placeholder is not one: it is a hint about the value, it disappears the moment
+  // anything is typed, and assistive tech is under no obligation to read it as a label at all.
   const choice = document.createElement('select');
   choice.className = 'hint-row-label';
+  choice.setAttribute('aria-label', 'Hint category');
 
   const typed = document.createElement('input');
   typed.className = 'hint-row-typed';
   typed.placeholder = 'Name your category';
+  typed.setAttribute('aria-label', 'New hint category name');
   typed.hidden = true;
 
   const field = document.createElement('input');
   field.className = 'hint-row-value';
   field.value = value ?? '';
   field.placeholder = '—';
+  field.setAttribute('aria-label', 'Hint answer');
 
   const readLabel = () => (choice.value === WRITE_MY_OWN ? typed.value.trim() : choice.value);
 
@@ -362,6 +479,19 @@ function renderPlayers() {
       archived.textContent = 'Archived';
       summary.append(archived);
     }
+    // Rated footballers carry their dots on the closed card: the point of rating them is to see
+    // the spread across a month at a glance, which means not opening forty cards to find it.
+    if (Number.isInteger(player.difficulty)) {
+      const rating = document.createElement('span');
+      rating.className = `chip chip-difficulty chip-difficulty-${player.difficulty}`;
+      rating.append(difficultyDots(player.difficulty));
+      const text = document.createElement('span');
+      text.className = 'visually-hidden';
+      text.textContent = `Difficulty ${difficultyLabel(player.difficulty)}`;
+      rating.append(text);
+      rating.title = `Difficulty ${difficultyLabel(player.difficulty)}`;
+      summary.append(rating);
+    }
 
     const body = document.createElement('div');
     body.className = 'player-body';
@@ -373,6 +503,7 @@ function renderPlayers() {
 
     const categoryField = document.createElement('select');
     categoryField.className = 'category-select';
+    categoryField.setAttribute('aria-label', `Category for ${player.name}`);
     fillCategorySelect(categoryField);
     categoryField.value = player.category;
 
@@ -408,6 +539,8 @@ function renderPlayers() {
     categoryLabelField.textContent = 'Category';
     categoryLabelField.append(categoryField);
 
+    const difficultyEditor = buildDifficultyEditor(player);
+
     const actions = document.createElement('div');
     actions.className = 'player-actions';
 
@@ -438,6 +571,7 @@ function renderPlayers() {
             category: categoryField.value,
             aliases: aliasField.value.split(',').map((a) => a.trim()).filter(Boolean),
             videoUrl: videoField.value.trim(),
+            difficulty: difficultyEditor.read(),
           },
         });
         await refresh();
@@ -488,7 +622,10 @@ function renderPlayers() {
     };
 
     actions.append(preview, replace, trace, save, publish, archive, remove);
-    details.append(hintEditor.list, hintEditor.caption, aliasLabel, videoLabel, categoryLabelField, actions);
+    details.append(
+      hintEditor.list, hintEditor.caption, aliasLabel, videoLabel, categoryLabelField,
+      difficultyEditor.field, actions,
+    );
     const opening = buildEasyOpening(player);
     body.append(art, ...(opening ? [opening] : []), details);
     card.append(summary, body);
@@ -730,6 +867,21 @@ async function renderInsights(date) {
     statRow('easy / hard', `${summary.modes.easy ?? 0} / ${summary.modes.hard ?? 0}`),
   );
   dom.insights.append(figures);
+
+  // A prediction nobody ever checks is just a note to self, so put the call next to the result.
+  // Only once somebody has actually played: with no rounds in, the solve rate is a placeholder 0
+  // and this would read as every rating being wildly optimistic.
+  if (Number.isInteger(data.player?.difficulty) && summary.players > 0) {
+    const called = document.createElement('p');
+    called.className = 'insight-called';
+    called.append(difficultyDots(data.player.difficulty));
+    const verdict = document.createElement('span');
+    verdict.textContent =
+      `You called it ${difficultyLabel(data.player.difficulty)} — ` +
+      `${summary.solveRate}% solved it, in ${summary.averageGuesses} guesses on average.`;
+    called.append(verdict);
+    dom.insights.append(called);
+  }
 
   if (summary.players === 0) {
     const none = document.createElement('p');
@@ -1029,6 +1181,36 @@ dom.logout.onclick = async () => {
   location.reload();
 };
 
+/**
+ * Show the picked file, small, next to the picker.
+ *
+ * A filename says nothing about the one thing that actually matters here: whether the photo is a
+ * cut-out with a transparent background — which becomes a silhouette on its own — or an ordinary
+ * photograph, which becomes nothing. Against the chequerboard the difference is unmistakable.
+ */
+function watchFilePicker(input, target) {
+  let objectUrl = null;
+  input.onchange = () => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    target.innerHTML = '';
+    const file = input.files[0];
+    if (!file) {
+      objectUrl = null;
+      return;
+    }
+    objectUrl = URL.createObjectURL(file);
+    const image = document.createElement('img');
+    image.src = objectUrl;
+    image.alt = '';
+    const caption = document.createElement('span');
+    caption.textContent = `${file.name} · ${Math.round(file.size / 1024)} KB`;
+    target.append(image, caption);
+  };
+}
+
+watchFilePicker(dom['new-silhouette'], dom['new-silhouette-preview']);
+watchFilePicker(dom['new-photo'], dom['new-photo-preview']);
+
 dom['add-form'].onsubmit = async (event) => {
   event.preventDefault();
   showError(dom['add-error'], '');
@@ -1043,6 +1225,9 @@ dom['add-form'].onsubmit = async (event) => {
   try {
     await api('/api/admin/players', { method: 'POST', form });
     dom['add-form'].reset();
+    // reset() empties the pickers but leaves what they drew, so clear those too.
+    dom['new-silhouette-preview'].innerHTML = '';
+    dom['new-photo-preview'].innerHTML = '';
     await refresh();
   } catch (error) {
     showError(dom['add-error'], error);

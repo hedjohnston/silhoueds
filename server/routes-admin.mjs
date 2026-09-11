@@ -377,6 +377,18 @@ adminRouter.patch('/players/:id', (req, res) => {
   if (typeof req.body.category === 'string' && CATEGORIES.includes(req.body.category)) {
     fields.category = req.body.category;
   }
+  // How hard the admin reckons this one will be. `null` is how you take a rating back off, so it
+  // is a valid value rather than a missing one — hence the explicit check for the key.
+  if ('difficulty' in req.body) {
+    const rating = req.body.difficulty;
+    if (rating === null) {
+      fields.difficulty = null;
+    } else if (Number.isInteger(rating) && rating >= 1 && rating <= 5) {
+      fields.difficulty = rating;
+    } else {
+      return res.status(400).json({ error: 'Difficulty is 1 to 5, or null for unrated.' });
+    }
+  }
   // Archiving is reversible and says nothing about whether a player is finished, so it is set
   // independently of status — an archived player stays published for the days they already ran.
   if (typeof req.body.archived === 'boolean') fields.archived = req.body.archived;
@@ -541,7 +553,9 @@ adminRouter.get('/insights', (req, res) => {
 
   res.json({
     date,
-    player: player ? { id: player.id, name: player.name, aliases: player.aliases } : null,
+    player: player
+      ? { id: player.id, name: player.name, aliases: player.aliases, difficulty: player.difficulty }
+      : null,
     summary: {
       players: rounds.length,
       solved,

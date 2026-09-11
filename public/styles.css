@@ -36,7 +36,14 @@ body {
   min-height: 100vh;
   /* Stops the rubber-band scroll revealing white behind the page in the installed app. */
   overscroll-behavior-y: none;
-  padding: clamp(10px, 3vw, 32px) clamp(10px, 3vw, 16px);
+  /* viewport-fit=cover plus a standalone manifest means the page really does run edge to edge on
+     a modern handset — under the rounded corners at the sides and under the home indicator at the
+     foot, which is exactly where Give up and the footer links sit. max() rather than adding the
+     inset, so a browser that reports none is left with the padding it always had. */
+  padding-top: clamp(10px, 3vw, 32px);
+  padding-bottom: max(clamp(10px, 3vw, 32px), env(safe-area-inset-bottom, 0px));
+  padding-left: max(clamp(10px, 3vw, 16px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(10px, 3vw, 16px), env(safe-area-inset-right, 0px));
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -75,6 +82,35 @@ body {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Playing an archive round. Loud enough not to be read past — the date line alone was too easy
+   to miss — and carrying its own way back, since otherwise today is only reachable by opening
+   the archive sheet again and finding it in the list. */
+.past-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 8px 0 0;
+  padding: 3px 6px 3px 14px;
+  background: var(--yellow);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.link.past-today {
+  padding: 7px 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink);
 }
 
 /*
@@ -118,7 +154,9 @@ body {
 }
 
 .mode {
-  padding: 8px 22px;
+  /* 11px, not 8: at 8 the pill stood 39px tall, under the 44 a fingertip actually wants — and
+     this is the control that chooses which of the two games you are playing. */
+  padding: 11px 22px;
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -195,6 +233,57 @@ body[data-round='live'] .stage-dock {
   gap: 10px;
 }
 
+/*
+ * Landscape on a phone: the art beside the round, not above it.
+ *
+ * Stacked, a sideways phone gave the masthead the top 200px of a 375px-tall viewport, so the
+ * first screen held the top third of the silhouette and nothing else — with the input two
+ * screens further down. Height is what has run out and width is what is going spare, so the
+ * stage takes a column of its own and everything else stacks beside it.
+ *
+ * Scoped to short *and* landscape: a narrow window that happens to be short is still a portrait
+ * shape, and two columns inside 375px would be worse than the scroll.
+ */
+@media (orientation: landscape) and (max-height: 560px) and (min-width: 620px) {
+  .card {
+    width: min(880px, 100%);
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: start;
+    column-gap: 20px;
+    row-gap: 8px;
+  }
+
+  /* Reserving the whole left column keeps auto-placement from dropping anything underneath it;
+     everything else lands in column two, in source order.
+     Sticky here rather than in the shared rule above, which stands down below 600px of height on
+     the reasoning that a short screen cannot spare the band. Side by side that reasoning inverts:
+     the art costs the right-hand column no height at all, and pinning it is what makes the
+     trade work — scroll down to the keyboard and the puzzle is still there beside it. */
+  body[data-round='live'] .stage-dock,
+  .stage-dock {
+    grid-column: 1;
+    grid-row: 1 / span 99;
+    align-self: start;
+    position: sticky;
+    top: 12px;
+    padding-bottom: 0;
+  }
+
+  .tagline { display: none; }
+  .logo { font-size: clamp(22px, 5vh, 28px); }
+  .date { margin-top: 2px; }
+  .header { text-align: left; }
+  /* justify-self, not align-self: a grid item stretches across its column by default, which
+     pulled the pill group and the badges out to the full width of the right-hand column. */
+  .modes, .settings-trigger, .past-flag { justify-self: start; }
+  .footer-nav { justify-content: flex-start; }
+  .stage { min-height: 0; padding: 10px; }
+  .silhouette svg, .silhouette img { height: min(320px, 62vh); }
+  .keyboard-row { gap: 4px; }
+  .key { height: 36px; }
+}
+
 /* --- the puzzle --- */
 
 .stage {
@@ -212,7 +301,10 @@ body[data-round='live'] .stage-dock {
 
 .silhouette svg, .silhouette img {
   display: block;
-  height: clamp(210px, 40vh, 320px);
+  /* The upper bound is a desktop measure: the stage is as wide as the card, so a portrait
+     silhouette capped at 320px left well over half the box empty blue on a laptop. 40vh only
+     reaches past 320 on a viewport taller than 800px, so nothing on a phone moves. */
+  height: clamp(210px, 40vh, 380px);
   width: auto;
   max-width: 100%;
   object-fit: contain;
@@ -391,8 +483,10 @@ body[data-round='live'] .stage-dock {
 .pip-correct .pip-dot { background: var(--green); }
 .pip-skipped .pip-dot { background: var(--grey); }
 
-/* Not yet spent: hollow, and drawn in the muted line so the spent ones read as the filled ones. */
-.pip-empty { border-color: var(--grey); background: transparent; }
+/* Not yet spent: hollow, and drawn lighter than the spent ones so those read as filled. Lighter,
+   though, not faint — these dots are the guesses-remaining counter, so they have to clear the 3:1
+   a meaningful control needs. --grey came to 2.58 against the ground. */
+.pip-empty { border-color: var(--muted); background: transparent; }
 
 /* Held open. The ring is the offset shadow the rest of the page uses, squared up into a halo so
    it reads as the same family of object. */
@@ -447,7 +541,9 @@ body[data-round='live'] .stage-dock {
   box-shadow: var(--shadow);
 }
 
-#guess-input::placeholder { color: var(--grey); font-weight: 500; }
+/* --muted rather than --grey: the placeholder is the only visible label this field has, and
+   --grey against white is 2.58:1. */
+#guess-input::placeholder { color: var(--muted); font-weight: 500; }
 
 button {
   font: inherit;
@@ -571,6 +667,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
   font-weight: 700;
 }
 
+/* Green is what getting it looks like — on the dots, and here. A round that ended any other way
+   takes the neutral, so the loudest thing on the card stops contradicting the title above it. */
+.result-name-lost { background: var(--grey-light); }
+
+/* Why a near-enough spelling counted. Quiet: it is a footnote to the answer, not a second
+   headline, and most rounds never have one. */
+.result-note {
+  margin: -4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.result-note:empty { display: none; }
+
+/* The chart plots wins; with none yet there is nothing to plot and this says so instead. */
+.stat-none {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* The admin's pick, framed the same as the stage and the hint card so it reads as part of the
    same object rather than an embed dropped in from elsewhere. */
 .result-video {
@@ -669,7 +788,9 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 .footer-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
 
 .link {
-  padding: 4px 2px;
+  /* Enough padding to make a 44px-tall target out of 14px text. These are small by design — they
+     are asides, not the round — but small to look at and small to hit are different things. */
+  padding: 11px 6px;
   border: none;
   background: none;
   box-shadow: none;
@@ -696,7 +817,19 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 
 .sheet::backdrop { background: rgb(0 0 0 / 0.45); }
 .sheet-close { display: flex; justify-content: flex-end; }
-.sheet-close button { border: none; background: none; box-shadow: none; font-size: 18px; color: var(--muted); }
+/* Padded out to a proper target: the glyph is small on purpose, but at 26x30 the thing you
+   actually have to hit was smaller than anything else on the page. */
+.sheet-close button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 7px 11px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
 .sheet-title { margin: 0 0 12px; font-family: var(--display); font-size: 22px; }
 .sheet-empty { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
 
@@ -733,7 +866,11 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 }
 
 .archive-entry:hover:not(:disabled) { transform: none; background: var(--grey-light); }
-.archive-status { font-size: 12px; font-weight: 800; color: var(--muted); }
+
+/* Full ink, not the muted grey: at 12px on the red "missed" pill that grey came to 3.37:1, under
+   the 4.5 it needs. The pill's own colour already says how the round went; the word only has to
+   be readable on all four of them. */
+.archive-status { font-size: 12px; font-weight: 800; color: var(--ink); }
 .archive-solved { background: var(--green); }
 .archive-failed { background: var(--red); }
 .archive-started { background: var(--yellow); }
@@ -770,7 +907,7 @@ body[data-error="true"] .silhouette { color: var(--muted); font-size: 14px; line
 }
 
 .auth-who { color: var(--muted); font-size: 13px; }
-.link.auth-signout { padding: 0; font-size: 13px; font-weight: 700; }
+.link.auth-signout { padding: 6px 4px; font-size: 13px; font-weight: 700; }
 
 /* --- sign in with Google --- */
 

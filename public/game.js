@@ -17,12 +17,15 @@ const dom = {
   result: el('result'),
   resultTitle: el('result-title'),
   resultName: el('result-name'),
+  resultNote: el('result-note'),
   resultVideo: el('result-video'),
   // Not named "share": iOS content blockers hide anything classed as a share button on sight,
   // which took the only way out of a finished round with it.
   share: Array.from(document.querySelectorAll('.result-send')),
   shareStatus: Array.from(document.querySelectorAll('.result-send-status')),
   puzzleDate: el('puzzle-date'),
+  pastFlag: el('past-flag'),
+  pastToday: el('past-today'),
   stats: el('stats'),
   comeback: el('comeback'),
   statsButton: el('stats-button'),
@@ -314,7 +317,22 @@ function renderHints() {
  */
 let openGuess = null;
 
-const guessLabel = (guess) => (guess.skipped ? 'Skipped' : guess.name);
+// Whether the winning guess only got there on the sound-alike matching, so the result can say so.
+let spelledLoosely = false;
+
+/**
+ * A guess as it should be read back, rather than as it was typed.
+ *
+ * The on-screen keyboard is the only keyboard on a phone and its keys are drawn — and so emit —
+ * uppercase, which meant every guess held open read as a shout. Only fully-uppercase guesses are
+ * touched, so someone typing "van Dijk" or "O'Neill" on a physical keyboard keeps it exactly.
+ */
+function titleCase(name) {
+  if (name !== name.toUpperCase()) return name;
+  return name.toLowerCase().replace(/(^|[\s'’-])([a-z])/g, (_, before, letter) => before + letter.toUpperCase());
+}
+
+const guessLabel = (guess) => (guess.skipped ? 'Skipped' : titleCase(guess.name));
 
 const guessOutcome = (guess) =>
   guess.correct ? 'correct' : guess.skipped ? 'skipped' : 'wrong';
@@ -345,7 +363,9 @@ function renderHistory() {
     // has no name to read, and "Skipped — skipped" is the outcome twice over.
     button.setAttribute(
       'aria-label',
-      guess.skipped ? `Guess ${slot + 1}: skipped` : `Guess ${slot + 1}: ${guess.name} — ${outcome}`,
+      guess.skipped
+        ? `Guess ${slot + 1}: skipped`
+        : `Guess ${slot + 1}: ${titleCase(guess.name)} — ${outcome}`,
     );
     button.setAttribute('aria-pressed', String(openGuess === slot));
     button.innerHTML = '<span class="pip-dot"></span>';
@@ -494,6 +514,13 @@ function render() {
         ? 'Gave up'
         : 'Out of guesses';
     dom.resultName.textContent = state.answer ?? '';
+    // Green is the colour of getting it; a loss should not be handed the answer in it.
+    dom.resultName.classList.toggle('result-name-lost', !state.won);
+    // Only for the round it happened in — a reload loses it, which is the right trade for not
+    // storing "how close was the spelling" on the play for ever.
+    dom.resultNote.textContent = spelledLoosely
+      ? 'Spelt loosely — close enough, so we counted it.'
+      : '';
     renderResultVideo();
     renderCountdown();
     api('/api/stats')
@@ -504,6 +531,63 @@ function render() {
 
 function notify(message) {
   dom.notice.textContent = message ?? '';
+}
+
+/**
+ * Put the caret back in the guess field without moving the page.
+ *
+ * The field is focused so a physical keyboard has somewhere to land — see the keydown handler in
+ * `init`, which ignores every key unless this is the active element. A bare `focus()` also scrolls
+ * the field into view, and the field lives above the on-screen keyboard near the foot of a long
+ * page: on a phone with browser chrome that scroll lands you most of a screen down, past the
+ * masthead on load and past the hint just revealed after every guess. `preventScroll` keeps the
+ * caret and drops the journey.
+ */
+function focusInput() {
+  dom.input.focus({ preventScroll: true });
+}
+
+/**
+ * How this page is allowed to move itself.
+ *
+ * Smooth, unless the reader has asked for less motion — the stylesheet already drops every
+ * transition for them, and a page that slides on its own is exactly the kind of movement that
+ * request is about. They still get taken where they are going, just without the journey.
+ */
+const scrollStyle = () =>
+  (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+/**
+ * Bring the newest hint into view, clear of the docked art.
+ *
+ * This is the thing a wrong guess just bought, so it is the thing worth scrolling to — the guess
+ * field was only ever being scrolled to as a side effect of focusing it. The art docks sticky-top
+ * while a round is live, so a plain scrollIntoView would tuck the hint underneath it; measuring
+ * the dock and clearing it by a margin is the difference between revealing a hint and hiding one.
+ */
+function showLatestHint() {
+  const hint = dom.hints.querySelector('.hint-latest');
+  if (!hint) return;
+
+  // While the art is docked it covers the top of the viewport, so the readable band starts under
+  // it rather than at zero — that gap is the whole reason a plain scrollIntoView won't do.
+  const dock = document.querySelector('.stage-dock');
+  const docked = dock && getComputedStyle(dock).position === 'sticky';
+  const ceiling = (docked ? dock.getBoundingClientRect().bottom : 0) + 12;
+  const floor = window.innerHeight - 12;
+
+  const box = hint.getBoundingClientRect();
+
+  // The smallest move that brings it into that band, in whichever direction it is out of it —
+  // and no move at all when it is already there. Minimal on purpose: a bigger scroll would read
+  // as the page bouncing after every guess, and would push the keyboard off the bottom on the
+  // way to a hint that only needed a nudge.
+  let delta = 0;
+  if (box.top < ceiling) delta = box.top - ceiling;
+  else if (box.bottom > floor) delta = Math.min(box.bottom - floor, box.top - ceiling);
+  if (Math.abs(delta) < 2) return;
+
+  window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: scrollStyle() });
 }
 
 /** The two things the on-screen keyboard and a physical one both do, however the key arrived. */
@@ -529,18 +613,24 @@ async function send(path, body) {
       method: 'POST',
       body: JSON.stringify({ ...(body ?? {}), tz: timeZone, date: viewingDate ?? undefined }),
     });
-    const spelling = next.spelling;
+    // A win on a near-enough spelling. Held here rather than pushed into #notice, which render()
+    // hides as soon as a round ends — and a fuzzy match is by definition a winning guess, so that
+    // line was written into a hidden element every single time and never once read.
+    spelledLoosely = Boolean(next.spelling);
     state = next;
     dom.input.value = '';
     render();
-    notify(spelling ? 'Close enough on the spelling — counted as correct.' : '');
+    notify('');
   } catch (error) {
     notify(error.message);
   } finally {
     busy = false;
     dom.input.disabled = false;
     dom.keyboard.classList.remove('keyboard-disabled');
-    if (!state.finished) dom.input.focus();
+    if (!state.finished) {
+      focusInput();
+      showLatestHint();
+    }
   }
 }
 
@@ -625,6 +715,19 @@ function renderStats(target, stats, highlight) {
   target.append(figures);
 
   if (stats.played === 0) return;
+
+  // The chart plots wins, so with none yet it is six rows of "0" under a caption explaining what
+  // they would have meant — a wall of nothing handed to someone who has just lost their first
+  // round. One line instead, until there is a shape to show.
+  const wins = Object.values(stats.distribution).reduce((total, n) => total + n, 0);
+  if (wins === 0) {
+    const none = document.createElement('p');
+    none.className = 'stat-none';
+    none.textContent = 'No wins yet — the first one starts the chart.';
+    target.append(none);
+    renderModeSplit(target, stats);
+    return;
+  }
 
   const most = Math.max(1, ...Object.values(stats.distribution));
   const chart = document.createElement('div');
@@ -866,6 +969,7 @@ function showNoRound(message) {
   dom.hints.innerHTML = '';
   dom.history.innerHTML = '';
   dom.puzzleDate.textContent = '';
+  dom.pastFlag.hidden = true;
   dom.modeNote.textContent = '';
 
   giveUpArmed = false;
@@ -887,6 +991,7 @@ function showNoRound(message) {
 async function openRound(date) {
   viewingDate = date;
   giveUpArmed = false;
+  spelledLoosely = false;
   notify('');
   try {
     state = await api('/api/puzzle');
@@ -896,6 +1001,7 @@ async function openRound(date) {
   }
 
   delete document.body.dataset.error;
+  dom.pastFlag.hidden = !viewingDate;
   dom.puzzleDate.textContent = new Date(`${state.date}T00:00:00Z`).toLocaleDateString(undefined, {
     dateStyle: 'long',
     timeZone: 'UTC',
@@ -912,7 +1018,7 @@ async function openRound(date) {
   }
 
   render();
-  if (!state.finished) dom.input.focus();
+  if (!state.finished) focusInput();
 }
 
 async function init() {
@@ -948,6 +1054,10 @@ async function init() {
     if (!key) return;
     if (key.dataset.key === 'Backspace') backspaceChar();
     else typeChar(key.dataset.key);
+    // Clicking a button focuses it, and the physical-keyboard handler below only listens while
+    // the guess field holds focus — so without this, typing the first letter with the mouse on
+    // desktop silently turns the real keyboard off for the rest of the guess.
+    focusInput();
   });
 
   // A physical keyboard still works, but only while the guess field itself is the focused
@@ -970,6 +1080,17 @@ async function init() {
     }
   });
 
+  // The field is readonly with inputmode="none", so tapping it opens no platform keyboard and,
+  // left alone, does nothing whatsoever — while the keyboard that *is* the answer starts below
+  // the fold on most screens. So the tap does the only useful thing available: it goes and finds
+  // that keyboard. Anyone who can already see it is left where they are.
+  dom.input.addEventListener('click', () => {
+    if (!state || state.finished || dom.keyboard.hidden) return;
+    const keys = dom.keyboard.getBoundingClientRect();
+    if (keys.bottom <= window.innerHeight) return;
+    dom.keyboard.scrollIntoView({ block: 'end', behavior: scrollStyle() });
+  });
+
   for (const button of dom.share) button.addEventListener('click', share);
   dom.modeHard.addEventListener('click', () => chooseMode('hard'));
   dom.modeEasy.addEventListener('click', () => chooseMode('easy'));
@@ -978,6 +1099,7 @@ async function init() {
   dom.statsButton.addEventListener('click', showStats);
   dom.archiveButton.addEventListener('click', showArchive);
   dom.settingsTrigger.addEventListener('click', () => dom.settingsSheet.showModal());
+  dom.pastToday.addEventListener('click', () => openRound(null));
   dom.authSignout.addEventListener('click', async () => {
     await api('/api/auth/logout', { method: 'POST' });
     location.reload();

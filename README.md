@@ -147,6 +147,24 @@ and see it sharp. That is an accepted trade — easy mode is opt-in, the game is
 blurring server-side would mean re-adding an image library and a few hundred MB to the container.
 Hard mode is unaffected: its photo is never sent early.
 
+## How hard will this be?
+
+A different thing from the section above, which is the mode a *player* picks. This one is the
+admin's private estimate of a footballer, and nobody else ever sees it.
+
+Each footballer can carry the admin's own call on their difficulty, 1 to 5 — **Obvious, Easy,
+Fair, Tough, Brutal** — set on the player card and shown as five dots on the closed card, so a
+month's worth of the pool can be scanned for balance without opening anything.
+
+It is an estimate, and it stays in the admin: the rating is never sent to the browser, and a test
+holds that line. A player should meet a silhouette without being told in advance how hard it is
+supposed to be.
+
+Rating anything is optional — unrated is its own state, not a 1 — and tapping the rung you already
+hold takes it back off. Once a day has been played, the **What people guessed** panel sets the
+call against what actually happened: *"You called it 4 · Tough — 33% solved it, in 4.3 guesses on
+average."* That comparison is the point of making the call at all.
+
 ## What players get
 
 - **Hints** arrive one per miss in hard mode, in the order the admin arranged that player's six
@@ -190,6 +208,8 @@ panel can show, for any day anyone played:
   a near miss, and both are needed: an absolute edit-distance cap, and a proportional one — two
   edits is a typo in a long name but a different word in a four-letter one.
 - **The full log** — every round's guesses in order, with a short session fragment.
+- **The call against the result** — if the footballer was rated, what the admin predicted, next to
+  what people managed. See [How hard will this be?](#how-hard-will-this-be) above.
 
 No names, emails or IP addresses are stored, so this shows *what* was guessed, never *who*
 guessed it. Guesses are free text, so they can contain anything a player types.

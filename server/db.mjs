@@ -31,6 +31,10 @@ db.exec(`
     photo            TEXT,                            -- uploaded reference photo filename
     reveal_image     TEXT,                            -- full photo, shown once the round is over
     video_id         TEXT,                            -- YouTube video id, shown once the round is over
+    -- The admin's own guess at how hard this one will be, 1 (obvious) to 5 (brutal). NULL means
+    -- nobody has called it yet, which is a different thing from calling it a 1 — so it stays
+    -- nullable rather than defaulting, and never reaches the player either way.
+    difficulty       INTEGER          CHECK (difficulty IS NULL OR difficulty BETWEEN 1 AND 5),
     category         TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
     status           TEXT    NOT NULL DEFAULT 'draft' -- draft | ready
                              CHECK (status IN ('draft', 'ready')),
@@ -94,6 +98,9 @@ for (const [name, definition] of [
   // Nobody is archived until someone says so, so every existing player carries forward live.
   ['archived', 'INTEGER NOT NULL DEFAULT 0'],
   ['video_id', 'TEXT'],          // YouTube video id, shown once the round is over
+  // No CHECK on the migrated column: SQLite cannot add a constraint to an existing table, and
+  // every write goes through players.update, which clamps. Existing players start unrated.
+  ['difficulty', 'INTEGER'],
 ]) {
   if (!hasColumn('players', name)) db.exec(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
 }
@@ -289,6 +296,9 @@ export const players = {
       silhouette_image: (v) => v,
       reveal_image: (v) => v,
       video_id: (v) => v,
+      // Stored as a number or nothing at all: anything outside 1-5 means unrated rather than
+      // clamped, since a bad value is a caller bug and silently rounding it hides that.
+      difficulty: (v) => (Number.isInteger(v) && v >= 1 && v <= 5 ? v : null),
       status: (v) => v,
       hint_source: (v) => v,
       category: (v) => v,
