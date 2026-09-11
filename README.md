@@ -126,7 +126,10 @@ guessing a path; both go through the API.
 
 ## Difficulty
 
-Two modes, chosen with a toggle above the puzzle and remembered for next time.
+Two modes, remembered for next time. The chooser sits at the foot of the page, under **Your
+stats** and **Past puzzles** — one line saying where the setting stands, opening the pills in a
+sheet. It is set once a round and then just spends height, so it lives with the rest of what you
+visit rather than play.
 
 - **Hard** — the original game. A black silhouette, and the colour photo is not sent to the
   browser at all until the round is over.
@@ -160,9 +163,11 @@ because players see them: being told the silhouette you just failed on was an *o
 poor way to end a round. None of them is "Easy" either, which is already the name of a mode on the
 same screen — two difficulties on one page, only one of them a control.
 
-**Players** get it beside the date — five dots and the word — from the start of the round, because
-it is context for the puzzle in the way the date is, not part of the answer. An unrated footballer
-shows nothing at all, rather than a low score. Tests hold both.
+**Players** get it directly under the Premier League / The Rest tabs — five dots and the word —
+from the start of the round, because it is context for the puzzle in the way the date is, not part
+of the answer. Under the tabs rather than anywhere else because those tabs choose which footballer
+it describes. An unrated footballer shows nothing at all, rather than a low score, and the line
+collapses rather than leaving a gap. Tests hold the payload half of that.
 
 **The admin** sets it on the player card and sees it as five dots on the closed card, so a month's
 worth of the pool can be scanned for balance without opening anything. Rating is optional —

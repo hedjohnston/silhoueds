@@ -84,20 +84,21 @@ body {
   color: var(--muted);
 }
 
-/* How hard the admin reckoned today's footballer would be, sitting on the date line.
-   Separated by a dot leader rather than a gap, so the two facts read as one line of round
-   metadata instead of two things that happen to be adjacent. */
+/* How hard the admin reckoned today's footballer would be, on its own line under the tabs that
+   choose the game. Set like the date — small, spaced, upper case — because it is the same kind
+   of thing: a fact about which round this is, captioning the puzzle rather than competing with
+   it. No underline and no button chrome; there is nothing here to press. */
 .rating {
-  display: inline-flex;
+  display: flex;
+  align-self: center;
   align-items: center;
-  gap: 6px;
-  vertical-align: baseline;
-}
-
-.rating::before {
-  content: '·';
-  margin: 0 4px 0 6px;
-  color: var(--grey);
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .rating-dots { display: inline-flex; gap: 3px; }
@@ -309,7 +310,7 @@ body[data-round='live'] .stage-dock {
   .header { text-align: left; }
   /* justify-self, not align-self: a grid item stretches across its column by default, which
      pulled the pill group and the badges out to the full width of the right-hand column. */
-  .modes, .settings-trigger, .past-flag { justify-self: start; }
+  .modes, .settings-trigger, .past-flag, .rating { justify-self: start; }
   .footer-nav { justify-content: flex-start; }
   .stage { min-height: 0; padding: 10px; }
   .silhouette svg, .silhouette img { height: min(320px, 62vh); }

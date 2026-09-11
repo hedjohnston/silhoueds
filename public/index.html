@@ -39,15 +39,7 @@
     <header class="header">
       <h1 class="logo">Silhoueds</h1>
       <p class="tagline">Name the footballer from their shadow.</p>
-      <!-- The date, and beside it how hard the admin reckoned today's footballer would be. Both
-           are facts about which round this is, so they share a line — and sharing it means the
-           rating costs no height, on a page where height is the scarce thing. Deliberately not
-           near the Hard/Easy control below: that is a setting the player chooses, this is a
-           label on the puzzle, and stacking the two would read as one confused idea. -->
-      <p class="date">
-        <span id="puzzle-date"></span>
-        <span class="rating" id="puzzle-rating" hidden></span>
-      </p>
+      <p class="date" id="puzzle-date"></p>
 
       <!-- Only on an archive round. The date line above changes too, but a date alone is a weak
            signal for "this is not today's puzzle" — easy to read straight past, and by the time
@@ -65,13 +57,11 @@
       <button class="mode" id="category-intl" type="button" data-category="international" aria-pressed="true">The Rest</button>
     </div>
 
-    <!-- Difficulty used to be a second pill row plus a note line here, every round, on every
-         screen — set once and then just spending height. A tap-once-a-round setting doesn't need
-         to stay on screen; this summary does the same job in one line, and the pills themselves
-         moved into the sheet below. -->
-    <button class="link settings-trigger" id="settings-trigger" type="button">
-      <span id="settings-summary"></span>
-    </button>
+    <!-- How hard the admin reckoned today's footballer would be, directly under the tabs that
+         choose which footballer that is. A label on the puzzle, not a control: nothing to tap,
+         and set quietly so it reads as a caption to the game above it rather than competing
+         with it. Absent entirely on an unrated footballer. -->
+    <p class="rating" id="puzzle-rating" hidden></p>
 
     <!-- The art and the input are the two things you need at the same time; the hints and the
          transcript between them are reference that grows by a row per guess. Each is docked so
@@ -184,6 +174,15 @@
       <button class="link" id="stats-button" type="button">Your stats</button>
       <button class="link" id="archive-button" type="button">Past puzzles</button>
     </nav>
+
+    <!-- Difficulty used to be a second pill row plus a note line up by the tabs, every round, on
+         every screen — set once and then just spending height. It is a tap-once-a-round setting,
+         so it lives down here with the rest of what you visit rather than play: one line that
+         says where it stands, opening the pills in a sheet. Its own row rather than a third item
+         in the nav above, which wrapped awkwardly on a phone once the summary was on it. -->
+    <button class="link settings-trigger" id="settings-trigger" type="button">
+      <span id="settings-summary"></span>
+    </button>
 
     <!-- Its own row rather than two more footer links: four across never fit a phone without
          wrapping somewhere unfortunate, and the name is a statement while only the sign-out is

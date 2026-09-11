@@ -239,6 +239,11 @@ function renderModes() {
 function renderSettingsSummary() {
   const modeLabel = (state?.mode ?? preferredMode()) === 'easy' ? dom.modeEasy.textContent : dom.modeHard.textContent;
   dom.settingsSummary.textContent = `Difficulty · ${modeLabel}`;
+  // The visible line is a statement of where the setting stands, which is what it should say
+  // sitting in a row of links. Out loud that is all it says, and "Difficulty · Easy, button"
+  // never mentions that pressing it is how you change that — so the name spells out the verb.
+  // It matters more since this moved down here, away from the game it applies to.
+  dom.settingsTrigger.setAttribute('aria-label', `Difficulty: ${modeLabel}. Change it`);
 }
 
 async function chooseMode(mode) {
