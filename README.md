@@ -149,21 +149,28 @@ Hard mode is unaffected: its photo is never sent early.
 
 ## How hard will this be?
 
-A different thing from the section above, which is the mode a *player* picks. This one is the
-admin's private estimate of a footballer, and nobody else ever sees it.
+A different thing from the section above. That one is the mode a *player* chooses; this one is a
+label on the footballer, set by the admin and shown to everyone.
 
-Each footballer can carry the admin's own call on their difficulty, 1 to 5 — **Obvious, Easy,
-Fair, Tough, Brutal** — set on the player card and shown as five dots on the closed card, so a
-month's worth of the pool can be scanned for balance without opening anything.
+Each footballer can carry the admin's call on how hard they will be, 1 to 5 — **Icon**,
+**Famous**, **Familiar**, **Deep cut**, **Obscure**.
 
-It is an estimate, and it stays in the admin: the rating is never sent to the browser, and a test
-holds that line. A player should meet a silhouette without being told in advance how hard it is
-supposed to be.
+The words describe how well known the footballer is rather than grading the guesser. That matters
+because players see them: being told the silhouette you just failed on was an *obvious* one is a
+poor way to end a round. None of them is "Easy" either, which is already the name of a mode on the
+same screen — two difficulties on one page, only one of them a control.
 
-Rating anything is optional — unrated is its own state, not a 1 — and tapping the rung you already
-hold takes it back off. Once a day has been played, the **What people guessed** panel sets the
-call against what actually happened: *"You called it 4 · Tough — 33% solved it, in 4.3 guesses on
-average."* That comparison is the point of making the call at all.
+**Players** get it beside the date — five dots and the word — from the start of the round, because
+it is context for the puzzle in the way the date is, not part of the answer. An unrated footballer
+shows nothing at all, rather than a low score. Tests hold both.
+
+**The admin** sets it on the player card and sees it as five dots on the closed card, so a month's
+worth of the pool can be scanned for balance without opening anything. Rating is optional —
+unrated is its own state, not a 1 — and tapping the rung you already hold takes it back off.
+
+Once a day has been played, the **What people guessed** panel sets the call against what actually
+happened: *"You called it 4 · Deep cut — 33% solved it, in 4.3 guesses on average."* That
+comparison is the point of making the call at all.
 
 ## What players get
 
@@ -283,7 +290,7 @@ Public:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far. `?date=` plays an archived day. `?category=premier-league\|international` picks the game, default `international` (shown as "The Rest") |
+| `GET /api/puzzle` | Today's silhouette, earned hints, guesses so far, and the footballer's difficulty rating (1-5, or `null` if unrated). `?date=` plays an archived day. `?category=premier-league\|international` picks the game, default `international` (shown as "The Rest") |
 | `POST /api/guess` | `{ guess }` → updated state; the answer only once the round ends |
 | `POST /api/skip` | Burns a guess to reveal a hint |
 | `POST /api/mode` | `{ mode }` → sets hard or easy; refused once the round has a guess |
@@ -308,7 +315,7 @@ Admin, all behind a signed cookie except `/login`, `/logout` and `/session`:
 | `POST /api/admin/login` \| `/logout` | Sign in or out. Login is throttled per caller after six failures |
 | `GET /api/admin/session` | Whether you're signed in, plus the storage warning and the category list |
 | `GET\|POST /api/admin/players` | List, or create from a name and images |
-| `PATCH\|DELETE /api/admin/players/:id` | Edit hints, aliases, category, traced silhouette, status, archived — or remove |
+| `PATCH\|DELETE /api/admin/players/:id` | Edit hints, aliases, category, traced silhouette, status, archived, difficulty (1-5 or `null`) — or remove |
 | `POST /api/admin/players/archive-played` | Archive every footballer whose scheduled date has passed |
 | `POST /api/admin/players/:id/images` | Replace the silhouette and/or the photo |
 | `GET /api/admin/players/:id/photo` \| `/silhouette-image` | The stored images, for review |

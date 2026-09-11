@@ -39,7 +39,15 @@
     <header class="header">
       <h1 class="logo">Silhoueds</h1>
       <p class="tagline">Name the footballer from their shadow.</p>
-      <p class="date" id="puzzle-date"></p>
+      <!-- The date, and beside it how hard the admin reckoned today's footballer would be. Both
+           are facts about which round this is, so they share a line — and sharing it means the
+           rating costs no height, on a page where height is the scarce thing. Deliberately not
+           near the Hard/Easy control below: that is a setting the player chooses, this is a
+           label on the puzzle, and stacking the two would read as one confused idea. -->
+      <p class="date">
+        <span id="puzzle-date"></span>
+        <span class="rating" id="puzzle-rating" hidden></span>
+      </p>
 
       <!-- Only on an archive round. The date line above changes too, but a date alone is a weak
            signal for "this is not today's puzzle" — easy to read straight past, and by the time

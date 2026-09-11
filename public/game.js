@@ -24,6 +24,7 @@ const dom = {
   share: Array.from(document.querySelectorAll('.result-send')),
   shareStatus: Array.from(document.querySelectorAll('.result-send-status')),
   puzzleDate: el('puzzle-date'),
+  puzzleRating: el('puzzle-rating'),
   pastFlag: el('past-flag'),
   pastToday: el('past-today'),
   stats: el('stats'),
@@ -309,6 +310,48 @@ function renderHints() {
 }
 
 /**
+ * How hard the admin reckoned today's footballer would be, 1 to 5.
+ *
+ * Kept in step with the same list in admin/admin.js, which is a separate bundle with no module in
+ * common with this one. The words describe how well known the footballer is rather than grading
+ * the player — nobody wants to be told the silhouette they just failed on was an obvious one —
+ * and none of them is "Easy", which is already the name of a mode on this page. All five are
+ * short enough to share the date's line at 320px; the pair that weren't wrapped it onto two.
+ */
+const RATINGS = ['Icon', 'Famous', 'Familiar', 'Deep cut', 'Obscure'];
+
+/**
+ * Draw the rating beside the date, or take it away when nobody has called this one.
+ *
+ * Five dots and a word. The dots carry it at a glance and the word says which way is hard, since
+ * a row of dots alone never says whether full means easy or brutal.
+ */
+function renderRating() {
+  const rating = state.difficulty;
+  const rated = Number.isInteger(rating) && rating >= 1 && rating <= 5;
+
+  dom.puzzleRating.hidden = !rated;
+  dom.puzzleRating.textContent = '';
+  if (!rated) return;
+
+  const dots = document.createElement('span');
+  dots.className = 'rating-dots';
+  // The dots are decoration over the word beside them, which says the same thing out loud.
+  dots.setAttribute('aria-hidden', 'true');
+  for (let rung = 1; rung <= 5; rung++) {
+    const dot = document.createElement('span');
+    dot.className = rung <= rating ? 'rating-dot rating-dot-on' : 'rating-dot';
+    dots.append(dot);
+  }
+
+  const word = document.createElement('span');
+  word.className = 'rating-word';
+  word.textContent = RATINGS[rating - 1];
+
+  dom.puzzleRating.append(dots, word);
+}
+
+/**
  * Which guess the player has tapped open, by index, or null for none.
  *
  * The dots carry how a guess went; the word they were actually typing is one tap away rather than
@@ -481,6 +524,7 @@ let shownGuesses = 0;
 
 function render() {
   renderCategories();
+  renderRating();
   renderModes();
   renderSettingsSummary();
   renderSilhouette();
@@ -969,6 +1013,7 @@ function showNoRound(message) {
   dom.hints.innerHTML = '';
   dom.history.innerHTML = '';
   dom.puzzleDate.textContent = '';
+  dom.puzzleRating.hidden = true;
   dom.pastFlag.hidden = true;
   dom.modeNote.textContent = '';
 

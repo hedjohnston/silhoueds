@@ -281,6 +281,10 @@ export function publicState(player, play) {
     fill: easy ? fillFor(guesses, finished) : null,
     date: play?.date,
     category: player.category,
+    // How hard the admin reckoned this one would be, 1 to 5, or null if nobody called it. Sent
+    // from the start rather than held back to the reveal: it is context for the round you are
+    // about to play, the way the date is, not part of the answer.
+    difficulty: player.difficulty ?? null,
     // Uploaded artwork is served through the API; a traced outline is inlined as SVG.
     silhouetteUrl: player.silhouette_image ? '/api/puzzle/silhouette' : null,
     silhouette: player.silhouette_image ? null : player.silhouette,

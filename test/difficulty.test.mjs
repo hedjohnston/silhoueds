@@ -1,7 +1,7 @@
 // The admin's own call on how hard a footballer will be, 1 to 5. Covers the range, the two ways
 // a rating can be absent (never set, and taken back off), the reject path for anything that is
-// not a rung on the scale, and the guarantee the whole feature rests on: it never reaches the
-// player.
+// not a rung on the scale, and the two places the number has to arrive: beside the date in the
+// player's round, and beside the result in the admin's insights panel.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -128,22 +128,60 @@ test('a rating survives an unrelated edit', async () => {
   assert.equal(players.get(id).difficulty, 2);
 });
 
-// The point of the rating is that it is the admin's private estimate. If it ever crossed to the
-// browser it would be a hint nobody asked for — and on a hard round, a demoralising one.
-test('the rating never reaches the player', async () => {
+/** A published, scheduled footballer, so the public round endpoint has something to serve. */
+async function scheduled(date, category, difficulty) {
   const id = await newPlayer();
-  await rate(id, 5);
+  if (difficulty !== undefined) await rate(id, difficulty);
   players.update(id, {
     hints: [{ label: 'Position', value: 'Striker' }],
     silhouette: '<svg></svg>',
     status: 'ready',
   });
-  schedule.set('2026-01-15', 'international', id);
+  schedule.set(date, category, id);
+  return id;
+}
+
+// The rating is context for the round, like the date — so it travels with the round from the
+// start, rather than waiting for the reveal.
+test('the rating reaches the player, before the round is over', async () => {
+  await scheduled('2026-01-15', 'international', 5);
 
   const response = await fetch(`${base}/api/puzzle?category=international&date=2026-01-15`);
   assert.equal(response.status, 200);
-  const payload = await response.text();
-  assert.ok(!payload.includes('difficulty'), 'public round state must not carry the rating');
+  const round = await response.json();
+  assert.equal(round.difficulty, 5);
+  // Still an unplayed round: the rating is not something the reveal hands over.
+  assert.equal(round.finished, false);
+  assert.equal(round.answer, undefined);
+});
+
+test('an unrated footballer sends no rating rather than a low one', async () => {
+  await scheduled('2026-01-17', 'international');
+
+  const response = await fetch(`${base}/api/puzzle?category=international&date=2026-01-17`);
+  const round = await response.json();
+  assert.equal(round.difficulty, null);
+});
+
+// The rating says how hard the footballer is; it must never imply anything about the answer.
+test('the rating does not vary with how the round is going', async () => {
+  await scheduled('2026-01-18', 'premier-league', 3);
+  const jar = [];
+  const ask = async () => {
+    const r = await fetch(`${base}/api/puzzle?category=premier-league&date=2026-01-18`, {
+      headers: jar.length ? { cookie: jar.join('; ') } : {},
+    });
+    for (const c of r.headers.getSetCookie()) jar.push(c.split(';')[0]);
+    return (await r.json()).difficulty;
+  };
+  const before = await ask();
+  await fetch(`${base}/api/guess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie: jar.join('; ') },
+    body: JSON.stringify({ guess: 'Nobody', category: 'premier-league', date: '2026-01-18' }),
+  });
+  assert.equal(before, 3);
+  assert.equal(await ask(), 3);
 });
 
 // The admin panel sets the call against what people actually managed, so it needs it back.

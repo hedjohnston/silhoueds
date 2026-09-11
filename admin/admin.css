@@ -436,8 +436,8 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 
    The admin's call on how hard a footballer will be, 1 to 5. Five rungs that fill up to the one
    chosen rather than five separate toggles: it is a scale, and a scale that fills reads as one
-   the way five lit-or-not boxes never do. It is an estimate and it stays in the admin — the
-   player is never told how hard today is supposed to be. */
+   the way five lit-or-not boxes never do. It is an estimate, and the player sees it: the same
+   five dots and the same word sit beside the date in the game. */
 
 .difficulty-field { display: flex; flex-direction: column; gap: 6px; }
 
@@ -476,12 +476,13 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 /* The same rating, read-only: on the closed player card and beside the day's result. */
 .difficulty-dots { display: inline-flex; gap: 3px; vertical-align: middle; }
 
+/* Two weights of solid dot, not outline-versus-fill: at 7px an outlined dot is almost all
+   border, so an empty one and a full one look the same. */
 .difficulty-dot {
   width: 7px;
   height: 7px;
-  border: 1.5px solid var(--edge);
   border-radius: 999px;
-  background: transparent;
+  background: #c9ccd3;
 }
 
 .difficulty-dot-on { background: var(--edge); }

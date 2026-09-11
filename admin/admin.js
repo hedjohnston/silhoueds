@@ -97,10 +97,17 @@ function statusChip(player) {
  *
  * A word per rung rather than bare numbers: "4" means nothing on its own, and the whole value of
  * the rating is that two people — or the same person three months apart — read it the same way.
- * Never sent to the player; it exists to balance the schedule, and to be checked against what
- * people actually managed in the insights panel below.
+ *
+ * The words describe the footballer's fame rather than grading the guesser, for two reasons.
+ * Players see this now, and being told a silhouette was "obvious" after failing to name it is a
+ * poor way to end a round. And the old rung 2 was "Easy", which is the name of a mode the player
+ * chooses — two different difficulties on one screen, one of them a control and one of them not.
+ *
+ * Kept in step with the same list in public/game.js, which is a separate bundle with no module
+ * in common with this one — and kept short, because in the game they share the date's line and
+ * the longest of them has to fit a 320px screen beside it.
  */
-const DIFFICULTY_LABELS = ['Obvious', 'Easy', 'Fair', 'Tough', 'Brutal'];
+const DIFFICULTY_LABELS = ['Icon', 'Famous', 'Familiar', 'Deep cut', 'Obscure'];
 
 const difficultyLabel = (rating) =>
   Number.isInteger(rating) && rating >= 1 && rating <= 5
@@ -158,8 +165,8 @@ function buildDifficultyEditor(player) {
       button.tabIndex = chosen === rating || (chosen === null && rating === 1) ? 0 : -1;
     }
     caption.textContent = chosen === null
-      ? 'Not rated yet — your own estimate, never shown to players.'
-      : `${difficultyLabel(chosen)} — never shown to players.`;
+      ? 'Not rated yet — players see nothing until you call it.'
+      : `${difficultyLabel(chosen)} — shown to players with the date.`;
     clear.hidden = chosen === null;
   };
 

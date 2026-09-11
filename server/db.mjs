@@ -31,9 +31,10 @@ db.exec(`
     photo            TEXT,                            -- uploaded reference photo filename
     reveal_image     TEXT,                            -- full photo, shown once the round is over
     video_id         TEXT,                            -- YouTube video id, shown once the round is over
-    -- The admin's own guess at how hard this one will be, 1 (obvious) to 5 (brutal). NULL means
-    -- nobody has called it yet, which is a different thing from calling it a 1 — so it stays
-    -- nullable rather than defaulting, and never reaches the player either way.
+    -- The admin's guess at how hard this one will be, 1 (an icon) to 5 (obscure), and shown to
+    -- the player beside the date. NULL means nobody has called it yet, which is a different
+    -- thing from calling it a 1 — so it stays nullable rather than defaulting, and an unrated
+    -- footballer shows the player nothing rather than a low score.
     difficulty       INTEGER          CHECK (difficulty IS NULL OR difficulty BETWEEN 1 AND 5),
     category         TEXT    NOT NULL DEFAULT '${DEFAULT_CATEGORY}',
     status           TEXT    NOT NULL DEFAULT 'draft' -- draft | ready

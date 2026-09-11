@@ -84,6 +84,39 @@ body {
   color: var(--muted);
 }
 
+/* How hard the admin reckoned today's footballer would be, sitting on the date line.
+   Separated by a dot leader rather than a gap, so the two facts read as one line of round
+   metadata instead of two things that happen to be adjacent. */
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: baseline;
+}
+
+.rating::before {
+  content: '·';
+  margin: 0 4px 0 6px;
+  color: var(--grey);
+}
+
+.rating-dots { display: inline-flex; gap: 3px; }
+
+/* Solid dots in two weights rather than the outlined ones the rest of the page uses. At 7px an
+   outline leaves a hole barely two pixels across, so filled and empty look identical — the
+   difference has to be in the colour, not in whether the middle is painted. */
+.rating-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--grey);
+}
+
+.rating-dot-on { background: var(--ink); }
+
+/* The word carries the meaning, so it gets the ink; the dots are the glance. */
+.rating-word { color: var(--ink); }
+
 /* Playing an archive round. Loud enough not to be read past — the date line alone was too easy
    to miss — and carrying its own way back, since otherwise today is only reachable by opening
    the archive sheet again and finding it in the list. */
