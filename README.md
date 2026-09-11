@@ -169,9 +169,15 @@ of the answer. Under the tabs rather than anywhere else because those tabs choos
 it describes. An unrated footballer shows nothing at all, rather than a low score, and the line
 collapses rather than leaving a gap. Tests hold the payload half of that.
 
-**The admin** sets it on the player card and sees it as five dots on the closed card, so a month's
-worth of the pool can be scanned for balance without opening anything. Rating is optional —
-unrated is its own state, not a 1 — and tapping the rung you already hold takes it back off.
+**The admin** sets it at the top of the player card, above the hints — on a phone it sat under
+the hints, the aliases, the video and the category, which is a screen and a half of scrolling past
+fields you didn't open the card for. The scale is boxed off from the plain fields around it, the
+five words are spelled out under the rungs rather than left to be guessed from the numbers, and a
+rung you have tapped but not saved says so, because Save edits is at the foot of the card. Every
+closed card carries the rating: five dots for a rated footballer, a dashed **Rate** for one
+without, so a month's worth of the pool can be scanned for balance — and the gaps found — without
+opening anything. Rating is optional — unrated is its own state, not a 1 — and tapping the rung
+you already hold takes it back off.
 
 Once a day has been played, the **What people guessed** panel sets the call against what actually
 happened: *"You called it 4 · Deep cut — 33% solved it, in 4.3 guesses on average."* That

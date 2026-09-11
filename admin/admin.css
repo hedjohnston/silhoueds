@@ -439,7 +439,17 @@ input:focus-visible, select:focus-visible, button:focus-visible {
    the way five lit-or-not boxes never do. It is an estimate, and the player sees it: the same
    five dots and the same word sit beside the date in the game. */
 
-.difficulty-field { display: flex; flex-direction: column; gap: 6px; }
+/* Boxed off, unlike the plain labelled fields around it, so the scale reads as the one control
+   at the top of the card rather than as decoration under the hints. */
+.difficulty-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--card-tint);
+  border: 2px solid var(--edge);
+  border-radius: 12px;
+}
 
 .difficulty-legend { display: block; }
 
@@ -454,6 +464,9 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
+
+/* The scale spelled out, above the caption: what 3 means before you tap it. */
+.difficulty-key { margin: 0; font-size: 11px; font-weight: 700; color: var(--muted); }
 
 /* Filled up to the chosen rung, and warming as it climbs, so "how hard" has a direction and not
    just a count. The steps stay pale enough to keep black numerals legible on every one. */
@@ -490,6 +503,15 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .chip-difficulty { display: inline-flex; align-items: center; gap: 6px; background: #fff; }
 .chip-difficulty-4 { background: #ffd9a8; }
 .chip-difficulty-5 { background: #ffa7a7; }
+.chip-difficulty-unrated { background: #fff; color: var(--muted); border-style: dashed; }
+
+/* Phones. The five rungs share the row rather than wrapping mid-scale, and Clear takes its own
+   line underneath instead of hanging off the end of one. */
+@media (max-width: 640px) {
+  .difficulty-scale { gap: 4px; }
+  .difficulty-rung { flex: 1 1 0; width: auto; min-width: 0; }
+  .difficulty-clear { margin-left: 0; min-height: 40px; }
+}
 
 /* The call, set against what people actually managed. */
 .insight-called {

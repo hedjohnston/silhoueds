@@ -137,7 +137,8 @@ function difficultyDots(rating) {
  * edits under one Save — the same bargain every other field on the card makes.
  */
 function buildDifficultyEditor(player) {
-  let chosen = Number.isInteger(player.difficulty) ? player.difficulty : null;
+  const saved = Number.isInteger(player.difficulty) ? player.difficulty : null;
+  let chosen = saved;
 
   const field = document.createElement('div');
   field.className = 'difficulty-field';
@@ -145,7 +146,7 @@ function buildDifficultyEditor(player) {
   const legend = document.createElement('span');
   legend.className = 'alias-label difficulty-legend';
   legend.id = `difficulty-legend-${player.id}`;
-  legend.textContent = 'How hard will this be?';
+  legend.textContent = 'Difficulty — how hard will this be?';
 
   const scale = document.createElement('div');
   scale.className = 'difficulty-scale';
@@ -164,9 +165,17 @@ function buildDifficultyEditor(player) {
       // Only the chosen rung is in the tab order, so a radiogroup is one stop rather than five.
       button.tabIndex = chosen === rating || (chosen === null && rating === 1) ? 0 : -1;
     }
-    caption.textContent = chosen === null
-      ? 'Not rated yet — players see nothing until you call it.'
-      : `${difficultyLabel(chosen)} — shown to players with the date.`;
+    // Nothing on this card saves itself, and the scale now sits at the top of a card whose Save
+    // is at the foot of it — far enough away on a phone to be worth pointing at.
+    if (chosen !== saved) {
+      caption.textContent = chosen === null
+        ? 'Rating cleared — Save edits at the foot of the card to keep it.'
+        : `${difficultyLabel(chosen)} — Save edits at the foot of the card to keep it.`;
+    } else {
+      caption.textContent = chosen === null
+        ? 'Not rated yet — players see nothing until you call it.'
+        : `${difficultyLabel(chosen)} — shown to players with the date.`;
+    }
     clear.hidden = chosen === null;
   };
 
@@ -203,7 +212,16 @@ function buildDifficultyEditor(player) {
   };
 
   scale.append(clear);
-  field.append(legend, scale, caption);
+
+  // What the numbers mean, spelled out under the scale. The caption only ever names the rung
+  // already chosen, so without this a first rating is five unlabelled boxes — and the words
+  // won't fit on the buttons themselves at 320px.
+  const key = document.createElement('p');
+  key.className = 'difficulty-key';
+  key.textContent = DIFFICULTY_LABELS.map((word, i) => `${i + 1} ${word}`).join(' · ');
+  key.setAttribute('aria-hidden', 'true');
+
+  field.append(legend, scale, key, caption);
   paint();
 
   return { field, read: () => chosen };
@@ -486,10 +504,10 @@ function renderPlayers() {
       archived.textContent = 'Archived';
       summary.append(archived);
     }
-    // Rated footballers carry their dots on the closed card: the point of rating them is to see
-    // the spread across a month at a glance, which means not opening forty cards to find it.
+    // Every card carries its rating closed: the point of rating them is to see the spread across
+    // a month at a glance, which means not opening forty cards to find it.
+    const rating = document.createElement('span');
     if (Number.isInteger(player.difficulty)) {
-      const rating = document.createElement('span');
       rating.className = `chip chip-difficulty chip-difficulty-${player.difficulty}`;
       rating.append(difficultyDots(player.difficulty));
       const text = document.createElement('span');
@@ -497,8 +515,15 @@ function renderPlayers() {
       text.textContent = `Difficulty ${difficultyLabel(player.difficulty)}`;
       rating.append(text);
       rating.title = `Difficulty ${difficultyLabel(player.difficulty)}`;
-      summary.append(rating);
+    } else {
+      // An unrated footballer says so rather than showing nothing: a blank space is the one
+      // state that never tells you there is a rating to set, which is exactly the footballer
+      // you want to open.
+      rating.className = 'chip chip-difficulty chip-difficulty-unrated';
+      rating.textContent = 'Rate';
+      rating.title = 'Not rated yet — open the card to call it';
     }
+    summary.append(rating);
 
     const body = document.createElement('div');
     body.className = 'player-body';
@@ -629,9 +654,12 @@ function renderPlayers() {
     };
 
     actions.append(preview, replace, trace, save, publish, archive, remove);
+    // The rating leads the card. It sat last, under the hints, the aliases, the video and the
+    // category — on a phone that is a screen and a half of scrolling past fields you didn't open
+    // the card for, and a control nobody scrolls to is a control nobody uses.
     details.append(
-      hintEditor.list, hintEditor.caption, aliasLabel, videoLabel, categoryLabelField,
-      difficultyEditor.field, actions,
+      difficultyEditor.field, hintEditor.list, hintEditor.caption, aliasLabel, videoLabel,
+      categoryLabelField, actions,
     );
     const opening = buildEasyOpening(player);
     body.append(art, ...(opening ? [opening] : []), details);
