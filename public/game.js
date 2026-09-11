@@ -722,9 +722,16 @@ function shareGrid() {
   // which only reads if the marker is loud enough to notice missing.
   const marker = state.mode === 'easy' ? ' 👁' : '';
   const tag = state.category === 'premier-league' ? ' PL' : '';
+  // How hard the footballer was reckoned to be. The word, not the dots the page draws: this is
+  // text going into a chat, where five circles could be a rating of anything, and "Obscure" says
+  // on its own which end of the scale it sits at. It belongs to the puzzle rather than to how the
+  // round went, which is why it follows the score rather than the caveat below — and an unrated
+  // footballer adds nothing at all, separator included.
+  const rated = Number.isInteger(state.difficulty) && state.difficulty >= 1 && state.difficulty <= 5;
+  const rating = rated ? ` · ${RATINGS[state.difficulty - 1]}` : '';
   const caveat = shareCaveat();
   const caveatLine = caveat ? `\n${caveat}` : '';
-  return `Silhoueds${tag} #${puzzleNumber()} ${score}${marker}\n${squares}${caveatLine}`;
+  return `Silhoueds${tag} #${puzzleNumber()} ${score}${marker}${rating}\n${squares}${caveatLine}`;
 }
 
 /** Grid plus link, for when we're pasting text rather than handing over a URL separately. */

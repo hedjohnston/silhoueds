@@ -189,14 +189,27 @@ comparison is the point of making the call at all.
   most desktop browsers), falling back to the clipboard. The link goes *inside* the shared text
   rather than in a separate `url` field: several targets, WhatsApp among them, use only `url` and
   silently drop `text` when both are present, which sent the bare link and none of the score.
+  The grid carries the difficulty rating as a word rather than the dots the page draws — five
+  circles in a chat could be a rating of anything, where *Obscure* says which end it sits at:
+
+  ```
+  Silhoueds PL #20 2/6 👁 · Deep cut
+  🟥🟩
+  With 1 hint
+  ```
+
+  `PL` marks the Premier League game, `👁` marks an easy round, and an unrated footballer adds
+  nothing at all, separator included.
 - **Installable** — a web manifest and an `apple-touch-icon`, so the game can be added to the
   Home Screen and opens without browser chrome. Icons are committed; regenerate them with
   `node tools/make-icons.mjs --source assets/icon-source.jpg`, which needs Playwright via `npx`
   (deliberately not a project dependency). `--source` accepts a screenshot of the game's own
   stage — it finds the panel, steps past the frame and crops the figure out.
-- **No accidental zoom** — the game blocks pinch-zoom where the platform allows it, and kills
-  double-tap zoom and the iOS zoom-on-input everywhere. iOS Safari ignores the viewport flag by
-  design, so the targeted fixes carry it there. The admin keeps normal zoom, being a desk tool.
+- **No accidental zoom, but zoom still works** — double-tap zoom is killed by `touch-action:
+  manipulation` on every control, and the iOS zoom-on-input by the guess field's 16px type. Both
+  are aimed at the gesture that actually misfires. Pinch-zoom is deliberately *not* blocked:
+  `maximum-scale`/`user-scalable` used to do that on Android and in the installed app, which took
+  magnification away from anyone who needs it to read a silhouette.
 - **Link previews** — a pasted link shows a plain text card: title, description and URL, with
   **no image, deliberately**. `og:image`/`twitter:image` were tried and removed by request, so
   don't reinstate them without asking. The remaining tags still need an absolute URL and scrapers
