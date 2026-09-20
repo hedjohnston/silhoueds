@@ -659,18 +659,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 .link.give-up:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Same idiom as give-up — a quiet aside sitting between the art and the hints, not a key — but its
-   own line since the two are never on offer for the same reason at the same time. */
-.link.see-kit {
+/* Below Give up, not styled like it: that one is a way out and stays quiet on purpose, but this
+   is worth taking, not something to step around, so it gets the ordinary button treatment — pill,
+   border, hard shadow — that a quiet link deliberately opts out of. Yellow rather than the pink
+   Guess uses: it ties this to the hint panel and the Skip key, the same kind of help aimed at the
+   eye instead of the guess. */
+.see-kit {
   align-self: center;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  text-decoration: none;
+  margin-top: 2px;
+  padding: 10px 22px;
+  background: var(--yellow);
+  font-size: 14px;
 }
 
-.link.see-kit:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Showing: inverted, so the one control that changes what's on the stage is unmistakable about
+   which state it's currently in — the same "this is active" idiom the guess pips use. */
+.see-kit[aria-pressed='true'] { background: var(--ink); color: var(--ground); }
 
 /* Armed: one tap in, waiting for the second. A pastel block with black ink is the idiom the rest
    of the page uses for "this is a thing", and it makes the state impossible to miss on the one

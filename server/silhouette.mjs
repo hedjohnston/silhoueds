@@ -155,44 +155,117 @@ export function encodePng({ width, height, rgba }) {
 }
 
 /**
- * How much of the figure's own height, from the top, counts as "the head" — cut here rather than
- * at a fixed pixel count, because photos are cropped tighter or looser and only the cut-out's own
- * bounding box says where the player actually starts.
+ * Used only when the neck can't be found below: how much of the figure's own height, from the
+ * top, counts as "the head". An adult's head runs to roughly an eighth of standing height — this
+ * is a bit more, to clear the chin — rather than the much bigger slice a plain "how tall is the
+ * whole bounding box" guess needs, which a raised arm or a running stride inflates with height
+ * that has nothing to do with the head, dragging the fallback down past the shoulders and into
+ * the shirt itself.
  */
-const HEAD_FRACTION = 0.32;
+const FALLBACK_HEAD_FRACTION = 0.16;
+
+/** Whatever the neck detection below finds, never trust it past this much of the figure. */
+const MAX_HEAD_FRACTION = 0.3;
+
+/** Only look for a neck this far into the figure — a waist or an armpit narrows too, further down. */
+const NECK_SEARCH_FRACTION = 0.4;
+
+/** A candidate neck has to be narrower than the head's own widest point by at least this much. */
+const NECK_TAPER = 0.85;
 
 /**
- * The kit, not the face: the same photo with the top slice of the player's own silhouette made
- * transparent, or null if there is no figure to find one in.
+ * The widest unbroken run of solid pixels on one row.
+ *
+ * A run rather than the full left-to-right span: a raised or trailing arm sits off to one side as
+ * a separate, disconnected blob on the same row, and the span would count the gap between it and
+ * the body as if it were the body's own width. A run only ever measures one blob at a time.
+ */
+function rowSpan(rgba, width, y, cut) {
+  let best = 0, run = 0;
+  const base = y * width;
+  for (let x = 0; x < width; x++) {
+    if (rgba[(base + x) * 4 + 3] >= cut) {
+      run++;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+  }
+  return best;
+}
+
+/**
+ * Where the head ends, found rather than guessed: a head widens from the crown to the ears, then
+ * narrows again at the neck before the shoulders widen out for good. That dip is a real
+ * anatomical landmark that holds regardless of how tall the figure's own bounding box happens to
+ * be, which is exactly what a fixed fraction of it does not — see FALLBACK_HEAD_FRACTION above.
+ *
+ * Returns null rather than a guess wherever the shape doesn't cooperate: no narrowing found, or a
+ * narrowing that never widens back out again to confirm it was a neck and not just noise. The
+ * caller falls back to the fixed fraction in that case.
+ */
+function neckRow(rgba, width, top, limit, cut) {
+  let peak = rowSpan(rgba, width, top, cut);
+  let neckY = null;
+  let neckWidth = Infinity;
+
+  for (let y = top + 1; y < limit; y++) {
+    const span = rowSpan(rgba, width, y, cut);
+    if (span === 0) continue;
+
+    if (span >= peak) {
+      // Still widening (or a new, wider blob): the head's own widest point moves down with it,
+      // and anything narrower seen before this wasn't the neck — a neck is only confirmed once
+      // the width climbs back out past it, which by definition hasn't happened yet.
+      peak = span;
+      neckY = null;
+      neckWidth = Infinity;
+      continue;
+    }
+
+    if (span < neckWidth) {
+      neckWidth = span;
+      neckY = y;
+    } else if (neckY !== null && span >= peak * 0.98) {
+      // Back out near the head's own peak width — the shoulders. Whatever the narrowest row was
+      // on the way here is the neck, provided it actually was narrower, not a wobble.
+      return neckWidth <= peak * NECK_TAPER ? neckY : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The kit, not the face: the same photo with the head made transparent, or null if there is no
+ * figure to find one in.
  *
  * Built off the alpha channel rather than any real detection — there is no face finder here, only
- * the cut-out's own shape — so "the head" is approximated as the top HEAD_FRACTION of the figure's
- * bounding box. That is blunt, but it costs nothing beyond what silhouetteFrom already pays for,
- * and it never needs to be exact: it only has to reliably leave the face out, not draw a clean line
- * at the neck.
+ * the cut-out's own shape — so this looks for the neck first (see neckRow above) and only falls
+ * back to a fixed fraction of the figure's height where the shape doesn't give one up. Either way
+ * the result is capped at MAX_HEAD_FRACTION, so a bad detection can never eat more than the top
+ * third of the figure.
  */
-export function kitCropFrom(buffer, { cut = CUT, headFraction = HEAD_FRACTION } = {}) {
+export function kitCropFrom(buffer, { cut = CUT } = {}) {
   const image = decodePng(buffer);
   if (!image) return null;
   const { width, height, rgba } = image;
 
   let top = null, bottom = null;
   for (let y = 0; y < height; y++) {
-    let inkOnRow = false;
-    for (let x = 0; x < width; x++) {
-      if (rgba[(y * width + x) * 4 + 3] >= cut) {
-        inkOnRow = true;
-        break;
-      }
-    }
-    if (inkOnRow) {
+    if (rowSpan(rgba, width, y, cut) > 0) {
       if (top === null) top = y;
       bottom = y;
     }
   }
   if (top === null) return null;
 
-  const hideBelow = Math.min(height, top + Math.round((bottom - top + 1) * headFraction));
+  const figureHeight = bottom - top + 1;
+  const searchLimit = Math.min(height, top + Math.round(figureHeight * NECK_SEARCH_FRACTION));
+  const neck = neckRow(rgba, width, top, searchLimit, cut);
+  const fallback = top + Math.round(figureHeight * FALLBACK_HEAD_FRACTION);
+  const cap = top + Math.round(figureHeight * MAX_HEAD_FRACTION);
+
+  const hideBelow = Math.min(neck ?? fallback, cap, height);
   for (let y = top; y < hideBelow; y++) {
     for (let x = 0; x < width; x++) rgba[(y * width + x) * 4 + 3] = 0;
   }

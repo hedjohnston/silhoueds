@@ -90,20 +90,22 @@ test('an interlaced PNG is refused, not decoded as if it were not', () => {
 
 // --- kitCropFrom: the kit, not the face ------------------------------------
 
-test('the kit crop blanks the top slice of the figure, sized off its own height', () => {
+test('a shape with no neck to find falls back to a fraction of the figure\'s own height', () => {
+  // A solid column never narrows, so there is no neck for neckRow to find anywhere in it — this
+  // exercises the fallback on its own.
   const size = 100;
   const bar = png(size, size, (x, y) => (x >= 40 && x < 60 ? 255 : 0)); // a solid column, full height
   const image = decodePng(kitCropFrom(bar));
   const alphaAt = (y) => image.rgba[(y * size + 50) * 4 + 3];
 
-  const hideBelow = Math.round(size * 0.32);
+  const hideBelow = Math.round(size * 0.16);
   assert.equal(alphaAt(0), 0, 'the top of the figure is hidden');
   assert.equal(alphaAt(hideBelow - 1), 0, 'still inside the hidden band');
   assert.equal(alphaAt(hideBelow), 255, 'just clear of the hidden band, untouched');
   assert.equal(alphaAt(size - 1), 255, 'the foot of the figure, well below the head');
 });
 
-test('the head is found from the figure\'s own bounding box, not the top of the canvas', () => {
+test('the fallback is found from the figure\'s own bounding box, not the top of the canvas', () => {
   // A figure starting well down the frame — a fixed fraction of the whole canvas would either
   // hide nothing (if it stopped short) or hide empty space above the player instead of the head.
   const size = 60;
@@ -111,10 +113,36 @@ test('the head is found from the figure\'s own bounding box, not the top of the 
   const image = decodePng(kitCropFrom(bar));
   const alphaAt = (y) => image.rgba[(y * size + 30) * 4 + 3];
 
-  const hideBelow = 20 + Math.round((size - 20) * 0.32);
+  const hideBelow = 20 + Math.round((size - 20) * 0.16);
   assert.equal(alphaAt(0), 0, 'above the figure there was never anything to show');
   assert.equal(alphaAt(20), 0, 'the very top of the figure is hidden');
   assert.equal(alphaAt(hideBelow), 255, 'clear of the head, the figure shows through');
+});
+
+test('a real neck is found regardless of how tall the whole figure is', () => {
+  // The bug this replaces: a fixed fraction of the WHOLE bounding box sized the crop off a
+  // running photo's foot-to-fingertip height, which has nothing to do with where the head ends —
+  // it reached past the shoulders and into the shirt itself. A head that widens then narrows
+  // before the shoulders widen back out is a real landmark, and finding it should stop the crop
+  // at the neck no matter how much taller the legs make the figure overall.
+  const w = 140, h = 400;
+  const head = (x, y) => {
+    const dx = (x - 70) / 18, dy = (y - 20) / 20;
+    return dx * dx + dy * dy <= 1 && y <= 40;
+  };
+  const torso = (x, y) => y >= 41 && y < 150 && x >= 20 && x < 120;
+  // Two legs, well apart, so no row down here ever measures as wide as the torso above it.
+  const legs = (x, y) => y >= 150 && y < h && ((x >= 40 && x < 55) || (x >= 85 && x < 100));
+  const figure = png(w, h, (x, y) => (head(x, y) || torso(x, y) || legs(x, y) ? 255 : 0));
+
+  const image = decodePng(kitCropFrom(figure));
+  const alphaAt = (x, y) => image.rgba[(y * w + x) * 4 + 3];
+
+  assert.equal(alphaAt(70, 20), 0, 'the head itself is hidden');
+  // A fixed 32%-of-the-whole-figure fraction (the old behaviour) would have hidden everything
+  // down to row 128 here — deep inside the torso. The neck should stop well short of that.
+  assert.equal(alphaAt(30, 100), 255, 'the torso, well clear of the head, is left alone');
+  assert.equal(alphaAt(30, 145), 255, 'even just above where the legs start, the torso still shows');
 });
 
 test('an empty photo gives nothing to crop', () => {

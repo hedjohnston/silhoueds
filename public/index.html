@@ -75,11 +75,6 @@
       </div>
     </div>
 
-    <!-- Hard mode only, and only once the final guess is the one on the table: a look at the
-         kit — colours and posture, not the face — costing nothing because there is no next guess
-         left for it to cost. Hidden the rest of the round. -->
-    <button class="link see-kit" id="see-kit-button" type="button" hidden>See the kit</button>
-
     <div class="hint-panel" id="hints" aria-live="polite" aria-label="Hints"></div>
 
     <div class="compose-dock">
@@ -157,6 +152,12 @@
            ends the round, so it should never be somewhere a thumb reaching for Space can find it.
            It asks twice — the second tap is the one that reveals — because there is no undo. -->
       <button class="link give-up" id="give-up" type="button">Give up</button>
+
+      <!-- Hard mode only, and only once the final guess is the one on the table: a look at the
+           kit — colours and posture, not the face — costing nothing because there is no next
+           guess left for it to cost. A real button, not a quiet link like Give up above it: this
+           is worth taking, not a way out. Hidden the rest of the round. -->
+      <button class="see-kit" id="see-kit-button" type="button" hidden>See the kit</button>
     </div>
 
     <section class="result" id="result" hidden aria-live="polite">
