@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 
-const { silhouetteFrom, decodePng, encodePng } = await import('../server/silhouette.mjs');
+const { silhouetteFrom, kitCropFrom, decodePng, encodePng } = await import('../server/silhouette.mjs');
 
 /** An RGBA PNG built by hand, so a test can say exactly what alpha each pixel has. */
 function png(width, height, alphaAt) {
@@ -86,6 +86,43 @@ test('an interlaced PNG is refused, not decoded as if it were not', () => {
   const interlaced = Buffer.from(cutout());
   interlaced[8 + 8 + 12] = 1; // IHDR's interlace byte
   assert.equal(silhouetteFrom(interlaced), null);
+});
+
+// --- kitCropFrom: the kit, not the face ------------------------------------
+
+test('the kit crop blanks the top slice of the figure, sized off its own height', () => {
+  const size = 100;
+  const bar = png(size, size, (x, y) => (x >= 40 && x < 60 ? 255 : 0)); // a solid column, full height
+  const image = decodePng(kitCropFrom(bar));
+  const alphaAt = (y) => image.rgba[(y * size + 50) * 4 + 3];
+
+  const hideBelow = Math.round(size * 0.32);
+  assert.equal(alphaAt(0), 0, 'the top of the figure is hidden');
+  assert.equal(alphaAt(hideBelow - 1), 0, 'still inside the hidden band');
+  assert.equal(alphaAt(hideBelow), 255, 'just clear of the hidden band, untouched');
+  assert.equal(alphaAt(size - 1), 255, 'the foot of the figure, well below the head');
+});
+
+test('the head is found from the figure\'s own bounding box, not the top of the canvas', () => {
+  // A figure starting well down the frame — a fixed fraction of the whole canvas would either
+  // hide nothing (if it stopped short) or hide empty space above the player instead of the head.
+  const size = 60;
+  const bar = png(size, size, (x, y) => (x >= 25 && x < 35 && y >= 20 ? 255 : 0));
+  const image = decodePng(kitCropFrom(bar));
+  const alphaAt = (y) => image.rgba[(y * size + 30) * 4 + 3];
+
+  const hideBelow = 20 + Math.round((size - 20) * 0.32);
+  assert.equal(alphaAt(0), 0, 'above the figure there was never anything to show');
+  assert.equal(alphaAt(20), 0, 'the very top of the figure is hidden');
+  assert.equal(alphaAt(hideBelow), 255, 'clear of the head, the figure shows through');
+});
+
+test('an empty photo gives nothing to crop', () => {
+  assert.equal(kitCropFrom(png(30, 30, () => 0)), null);
+});
+
+test('a file that is not a PNG is refused rather than throwing', () => {
+  assert.equal(kitCropFrom(Buffer.from('not a png')), null);
 });
 
 test('every PNG colour type a cut-out might be saved as is read the same way', () => {

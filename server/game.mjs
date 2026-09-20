@@ -290,6 +290,13 @@ export function publicState(player, play) {
     silhouette: player.silhouette_image ? null : player.silhouette,
     // The reveal photo only becomes reachable once the round is over.
     revealUrl: finished && player.reveal_image ? '/api/puzzle/reveal' : null,
+    // A last look before the final guess, hard mode only — the kit, not the face. Easy mode
+    // already shows colour, and a round with guesses still to spare has a hint ladder for this
+    // instead. It costs nothing: there is no next guess left for it to cost.
+    kitUrl:
+      !finished && !easy && guesses.length === MAX_GUESSES - 1 && player.reveal_image
+        ? '/api/puzzle/kit'
+        : null,
     // A goal, a moment — the admin's pick, shown next to the answer once there's an answer to
     // show it next to.
     videoId: finished && player.video_id ? player.video_id : null,

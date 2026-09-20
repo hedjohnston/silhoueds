@@ -155,6 +155,52 @@ export function encodePng({ width, height, rgba }) {
 }
 
 /**
+ * How much of the figure's own height, from the top, counts as "the head" — cut here rather than
+ * at a fixed pixel count, because photos are cropped tighter or looser and only the cut-out's own
+ * bounding box says where the player actually starts.
+ */
+const HEAD_FRACTION = 0.32;
+
+/**
+ * The kit, not the face: the same photo with the top slice of the player's own silhouette made
+ * transparent, or null if there is no figure to find one in.
+ *
+ * Built off the alpha channel rather than any real detection — there is no face finder here, only
+ * the cut-out's own shape — so "the head" is approximated as the top HEAD_FRACTION of the figure's
+ * bounding box. That is blunt, but it costs nothing beyond what silhouetteFrom already pays for,
+ * and it never needs to be exact: it only has to reliably leave the face out, not draw a clean line
+ * at the neck.
+ */
+export function kitCropFrom(buffer, { cut = CUT, headFraction = HEAD_FRACTION } = {}) {
+  const image = decodePng(buffer);
+  if (!image) return null;
+  const { width, height, rgba } = image;
+
+  let top = null, bottom = null;
+  for (let y = 0; y < height; y++) {
+    let inkOnRow = false;
+    for (let x = 0; x < width; x++) {
+      if (rgba[(y * width + x) * 4 + 3] >= cut) {
+        inkOnRow = true;
+        break;
+      }
+    }
+    if (inkOnRow) {
+      if (top === null) top = y;
+      bottom = y;
+    }
+  }
+  if (top === null) return null;
+
+  const hideBelow = Math.min(height, top + Math.round((bottom - top + 1) * headFraction));
+  for (let y = top; y < hideBelow; y++) {
+    for (let x = 0; x < width; x++) rgba[(y * width + x) * 4 + 3] = 0;
+  }
+
+  return encodePng(image);
+}
+
+/**
  * The black silhouette of a cut-out photo, or null if this image can't give one.
  *
  * The null cases are all "there is no shape here to take": a format we don't decode, or a picture

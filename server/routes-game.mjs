@@ -1,14 +1,17 @@
 // Public game API. Everything here is safe for an anonymous visitor.
 
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { playSession } from './auth.mjs';
 import { zoneOf } from './request.mjs';
 import {
   loadRound, publicState, submitGuess, todayKey, resolveRoundDate, statsFor, setMode,
-  normalizeCategory, endRound,
+  normalizeCategory, endRound, MAX_GUESSES,
 } from './game.mjs';
 import { schedule, plays } from './db.mjs';
-import { sendUpload } from './uploads.mjs';
+import { UPLOAD_DIR, sendUpload } from './uploads.mjs';
+import { kitCropFrom } from './silhouette.mjs';
 
 /** Which category this request is for — Premier League or International, each its own game. */
 function categoryOf(req) {
@@ -57,6 +60,26 @@ gameRouter.get('/puzzle/reveal', (req, res) => {
   // Hard mode keeps the photo back until the round is over; easy mode is the opt-in exception.
   if (!round.play.finished && round.play.mode !== 'easy') return res.status(403).end();
   sendUpload(res, round.player.reveal_image);
+});
+
+// The kit, not the face — a last look before the final guess. Same gating as `kitUrl` in
+// publicState; this is what that URL actually points at.
+gameRouter.get('/puzzle/kit', (req, res) => {
+  const sessionId = playSession(req, res);
+  const category = categoryOf(req);
+  const date = dateOf(req, category);
+  if (!date) return res.status(404).end();
+  const round = loadRound(sessionId, date, category);
+  if (!round?.player.reveal_image) return res.status(404).end();
+
+  const { play } = round;
+  const onFinalGuess = !play.finished && play.mode !== 'easy' && play.guesses.length === MAX_GUESSES - 1;
+  if (!onFinalGuess) return res.status(403).end();
+
+  const buffer = fs.readFileSync(path.join(UPLOAD_DIR, path.basename(round.player.reveal_image)));
+  const crop = kitCropFrom(buffer);
+  if (!crop) return res.status(404).end();
+  res.type('png').send(crop);
 });
 
 gameRouter.post('/guess', (req, res) => {

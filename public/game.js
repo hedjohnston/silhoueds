@@ -13,6 +13,7 @@ const dom = {
   keyboard: el('keyboard'),
   skip: el('skip-button'),
   giveUp: el('give-up'),
+  seeKit: el('see-kit-button'),
   notice: el('notice'),
   result: el('result'),
   resultTitle: el('result-title'),
@@ -139,8 +140,9 @@ async function api(path, options = {}) {
 }
 
 function renderSilhouette() {
+  const kit = showingKit && state.kitUrl;
   // Easy mode puts the photo on the stage from the start, filtered flat; the fill is the puzzle.
-  const source = state.revealUrl ?? state.photoUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
+  const source = state.revealUrl ?? (kit ? state.kitUrl : null) ?? state.photoUrl ?? state.silhouetteUrl ?? state.silhouette ?? '';
   const key = `${source}|${state.photoUrl ? 'photo' : ''}`;
 
   if (dom.silhouette.dataset.rendered === key) {
@@ -149,6 +151,15 @@ function renderSilhouette() {
   }
   dom.silhouette.dataset.rendered = key;
   dom.silhouette.innerHTML = '';
+
+  if (kit && !state.revealUrl) {
+    const photo = document.createElement('img');
+    photo.className = 'kit';
+    photo.src = withParams(state.kitUrl);
+    photo.alt = 'The kit — the face is left out';
+    dom.silhouette.append(photo);
+    return;
+  }
 
   if (state.photoUrl && !state.revealUrl) {
     const photo = document.createElement('img');
@@ -479,6 +490,15 @@ function renderResultVideo() {
 let giveUpArmed = false;
 
 /**
+ * Whether the kit is on screen in place of the silhouette. A view, not a server-side toggle: the
+ * round doesn't know or care, it just keeps handing back the same URL for as long as it's earned.
+ * Reset wherever `state` is replaced with a fresh round, so a leftover "on" from a previous final
+ * guess can't survive into one that hasn't earned it yet — `renderSeeKit` below also drops it the
+ * moment `state.kitUrl` disappears, which is what actually happens after a guess is submitted.
+ */
+let showingKit = false;
+
+/**
  * Is a skip no longer a skip?
  *
  * Skipping means "pass on this guess and take the hint instead". On the last guess there is no
@@ -490,6 +510,18 @@ let giveUpArmed = false;
  * guesses still in hand, and skipping there is still an ordinary skip.
  */
 const skipWouldEndRound = () => Boolean(state) && !state.finished && state.guessesLeft === 1;
+
+/**
+ * The kit button: only on offer on the final guess of a live hard round, and worded for whichever
+ * state it's currently in. `state.kitUrl` disappearing is what actually turns this off — a wrong
+ * final guess ends the round, and the reveal photo takes over the stage anyway.
+ */
+function renderSeeKit() {
+  if (!state.kitUrl) showingKit = false;
+  dom.seeKit.hidden = !state.kitUrl;
+  dom.seeKit.textContent = showingKit ? 'Hide the kit' : 'See the kit';
+  dom.seeKit.setAttribute('aria-pressed', String(showingKit));
+}
 
 function renderGiveUp() {
   const asKey = skipWouldEndRound();
@@ -533,6 +565,7 @@ function render() {
   renderModes();
   renderSettingsSummary();
   renderSilhouette();
+  renderSeeKit();
   renderHints();
 
   if (state.guesses.length !== shownGuesses) {
@@ -1049,6 +1082,7 @@ async function openRound(date) {
   viewingDate = date;
   giveUpArmed = false;
   spelledLoosely = false;
+  showingKit = false;
   notify('');
   try {
     state = await api('/api/puzzle');
@@ -1095,6 +1129,11 @@ async function init() {
   // `send` clears the armed flag on the way out, so both controls are back to "Give up" whichever
   // way the request went.
   dom.giveUp.addEventListener('click', confirmGiveUp);
+  dom.seeKit.addEventListener('click', () => {
+    if (!state?.kitUrl) return;
+    showingKit = !showingKit;
+    render();
+  });
 
   // Signing in asks twice as well, though for the opposite reason: not because it can't be undone,
   // but because nobody should be sent to Google without being told what it buys them.

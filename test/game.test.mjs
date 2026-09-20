@@ -307,6 +307,42 @@ test('hard mode is never given a fill at all', () => {
   assert.equal(state.photoUrl, null);
 });
 
+// --- kitUrl: a last look at the kit, hard mode only, on the final guess only -----------------
+
+/** publicState.kitUrl for a hard-mode round with `misses` guesses spent so far. */
+const kitUrlAfter = (misses, overrides = {}) =>
+  publicState(
+    { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>', ...overrides },
+    { date: '2026-08-27', guesses: Array.from({ length: misses }, () => guess('wrong')), mode: 'hard' },
+  ).kitUrl;
+
+test('the kit is offered only once a single guess is left', () => {
+  for (let misses = 0; misses < MAX_GUESSES - 1; misses++) {
+    assert.equal(kitUrlAfter(misses), null, `should be hidden after ${misses} guesses`);
+  }
+  assert.equal(kitUrlAfter(MAX_GUESSES - 1), '/api/puzzle/kit');
+});
+
+test('the kit is never offered in easy mode — the photo is already on screen', () => {
+  const player = { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
+  const guesses = Array.from({ length: MAX_GUESSES - 1 }, () => guess('wrong'));
+  const state = publicState(player, { date: '2026-08-27', guesses, mode: 'easy' });
+  assert.equal(state.kitUrl, null);
+});
+
+test('the kit disappears once the round is over, win or lose', () => {
+  const player = { name: 'X', hints: HINTS, reveal_image: 'r.png', silhouette: '<svg/>' };
+  const guesses = Array.from({ length: MAX_GUESSES - 1 }, () => guess('wrong'));
+  const won = publicState(player, { date: '2026-08-27', guesses: [...guesses, guess('X', true)], mode: 'hard', finished: true, won: true });
+  const lost = publicState(player, { date: '2026-08-27', guesses: [...guesses, guess('wrong')], mode: 'hard', finished: true, won: false });
+  assert.equal(won.kitUrl, null);
+  assert.equal(lost.kitUrl, null);
+});
+
+test('the kit needs a photo to crop, same as easy mode and the reveal', () => {
+  assert.equal(kitUrlAfter(MAX_GUESSES - 1, { reveal_image: null }), null);
+});
+
 // --- giving up -----------------------------------------------------------
 
 /** A ready player scheduled on a past date, so a round can be played without touching today. */

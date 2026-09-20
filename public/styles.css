@@ -350,6 +350,10 @@ body[data-round='live'] .stage-dock {
   border: 3px solid var(--line);
 }
 
+/* The kit crop stands in for the silhouette on the final guess. No frame, unlike the reveal —
+   this still isn't the answer, just a peek at part of it, and shouldn't look like one. */
+.silhouette img.kit { border-radius: 8px; }
+
 /* Easy mode: the silhouette fills in a step with every miss. The filter does all the work — the
    photo's own alpha is the shape — so nothing here moves or scales the image. */
 .silhouette img.morph {
@@ -654,6 +658,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 }
 
 .link.give-up:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Same idiom as give-up — a quiet aside sitting between the art and the hints, not a key — but its
+   own line since the two are never on offer for the same reason at the same time. */
+.link.see-kit {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.link.see-kit:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Armed: one tap in, waiting for the second. A pastel block with black ink is the idiom the rest
    of the page uses for "this is a thing", and it makes the state impossible to miss on the one
